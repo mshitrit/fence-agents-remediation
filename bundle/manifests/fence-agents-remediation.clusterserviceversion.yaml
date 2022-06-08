@@ -266,6 +266,32 @@ spec:
           - patch
           - update
         - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
           - storage.k8s.io
           resources:
           - volumeattachments
