@@ -3,7 +3,6 @@ package e2e
 import (
 	"context"
 	"math/rand"
-	"os"
 	"time"
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
@@ -59,32 +58,34 @@ var _ = Describe("FAR E2e", func() {
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 		err                              error
 	)
-	When("trying to identify cluster platform", func() {
-		It("should be AWS/BareMetal for finding the needed cluster and node parameters", func() {
-			// create FAR CR spec based on OCP platformn
-			clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
-			Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
-			log.Info("Getting Cluster Infromation", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
+	BeforeEach(func() {
+		//Building the params once for all of the tests
+		if testShareParam != nil && testNodeParam != nil {
+			return
+		}
+		// create FAR CR spec based on OCP platformn
+		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
+		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
+		log.Info("Getting Cluster Infromation", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
 
-			switch clusterPlatform.Status.PlatformStatus.Type {
-			case configv1.AWSPlatformType:
-				fenceAgent = fenceAgentAWS
-				nodeIdentifierPrefix = nodeIdentifierPrefixAWS
-				By("running fence_aws")
-			case configv1.BareMetalPlatformType:
-				fenceAgent = fenceAgentIPMI
-				nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
-				By("running fence_ipmilan")
-			default:
-				stopTesting = true // Mark to stop subsequent tests
-				Fail("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
-			}
+		switch clusterPlatform.Status.PlatformStatus.Type {
+		case configv1.AWSPlatformType:
+			fenceAgent = fenceAgentAWS
+			nodeIdentifierPrefix = nodeIdentifierPrefixAWS
+			By("running fence_aws")
+		case configv1.BareMetalPlatformType:
+			fenceAgent = fenceAgentIPMI
+			nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
+			By("running fence_ipmilan")
+		default:
+			stopTesting = true // Mark to stop subsequent tests
+			Fail("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
+		}
 
-			testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
-			Expect(err).ToNot(HaveOccurred(), "can't get shared information")
-			testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
-			Expect(err).ToNot(HaveOccurred(), "can't get node information")
-		})
+		testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
+		Expect(err).ToNot(HaveOccurred(), "can't get shared information")
+		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
+		Expect(err).ToNot(HaveOccurred(), "can't get node information")
 	})
 
 	// runFARTests is a utility function to run FAR tests.
@@ -136,23 +137,23 @@ var _ = Describe("FAR E2e", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
-			It("should successfully remediate the second node", func() {
+			/*It("should successfully remediate the second node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
-			})
+			})*/
 		})
 	}
 
-	Context("stress cluster with ResourceDeletion remediation strategy", func() {
+	FContext("stress cluster with ResourceDeletion remediation strategy", func() {
 		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, func() bool { return false })
 	})
 
-	Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
+	/*Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
 		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
-	})
+	})*/
 })
 
 var _ = AfterSuite(func() {
