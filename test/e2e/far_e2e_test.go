@@ -56,7 +56,8 @@ var _ = Describe("FAR E2e", func() {
 		fenceAgent, nodeIdentifierPrefix string
 		testShareParam                   map[v1alpha1.ParameterName]string
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
-		err                              error
+		credentialsParams                []v1alpha1.ParameterName
+		clusterPlatform                  *configv1.Infrastructure
 	)
 	BeforeEach(func() {
 		//Building the params once for all of the tests
@@ -64,7 +65,8 @@ var _ = Describe("FAR E2e", func() {
 			return
 		}
 		// create FAR CR spec based on OCP platformn
-		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
+		var err error
+		clusterPlatform, err = e2eUtils.GetClusterInfo(configClient)
 		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
 		log.Info("Getting Cluster Infromation", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
 
@@ -117,6 +119,7 @@ var _ = Describe("FAR E2e", func() {
 			nodeName = selectedNode.Name
 			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
 
+			var err error
 			// save the node's boot time prior to the fence agent call
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
@@ -131,11 +134,46 @@ var _ = Describe("FAR E2e", func() {
 			makeNodeUnready(selectedNode)
 
 			startTime = time.Now()
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy, credentialsParams)
 			DeferCleanup(deleteFAR, far)
 		})
-		When("running FAR to reboot two nodes", func() {
-			It("should successfully remediate node", func() {
+		When("running FAR with full credentials as plain text (Legacy)", func() {
+			It("should successfully remediate the node", func() {
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
+			})
+		})
+		When("running FAR with credentials in Secret", func() {
+			BeforeEach(func() {
+
+				//Reset Params so they may be cleaned re-initialized in the next test
+				//TODO mshitrit continue here, build the secret
+				var secretData map[string]string
+
+				testShareParam, credentialsParams, secretData, _ = buildSecureParameters(clusterPlatform, fenceAgentAction)
+
+				// Convert string map to byte map
+				dataBytes := make(map[string][]byte)
+				for key, value := range secretData {
+					dataBytes[key] = []byte(value)
+				}
+				//using default secret
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "default-secret",
+						Namespace: operatorNsName,
+					},
+					Data: dataBytes,
+					Type: corev1.SecretTypeOpaque,
+				}
+				Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
+
+				DeferCleanup(func() {
+					testShareParam = nil
+					testNodeParam = nil
+				})
+			})
+			It("should successfully remediate the node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
@@ -222,6 +260,66 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		}
 	}
 	return testShareParam, nil
+}
+
+// TODO mshitrit refactor getting the platform secrets in a separate method
+func buildSecureParameters(clusterPlatform *configv1.Infrastructure, action string) (map[v1alpha1.ParameterName]string, []v1alpha1.ParameterName, map[string]string, error) {
+	const (
+		//AWS
+		secretAWSName      = "aws-cloud-fencing-credentials-secret"
+		secretAWSNamespace = "openshift-operators"
+		secretKeyAWS       = "aws_access_key_id"
+		secretValAWS       = "aws_secret_access_key"
+
+		// BareMetal
+		//TODO: secret BM should be based on node name - > oc get bmh -n openshift-machine-api BM_NAME -o jsonpath='{.spec.bmc.credentialsName}'
+		secretBMHName      = "ostest-master-0-bmc-secret"
+		secretBMHNamespace = "openshift-machine-api"
+		secretKeyBM        = "username"
+		secretValBM        = "password"
+	)
+	secrets := map[string]string{}
+	var credentialsParams []v1alpha1.ParameterName
+	testShareParam := map[v1alpha1.ParameterName]string{}
+	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
+	if clusterPlatform.Status.PlatformStatus.Type == configv1.AWSPlatformType {
+		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
+		if err != nil {
+			log.Info("Can't get AWS credentials")
+			return nil, nil, nil, err
+		}
+
+		// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.aws.region}'
+		regionAWS := string(clusterPlatform.Status.PlatformStatus.AWS.Region)
+		credentialsParams = append(credentialsParams, "--access-key", "--secret-key")
+		testShareParam = map[v1alpha1.ParameterName]string{
+			"--region":          regionAWS,
+			"--action":          action,
+			"--skip-race-check": "",
+			// "--verbose":    "", // for verbose result
+		}
+		secrets["--access-key"] = accessKey
+		secrets["--secret-key"] = secretKey
+
+	} else if clusterPlatform.Status.PlatformStatus.Type == configv1.BareMetalPlatformType {
+		// TODO : get ip from GetCredientals
+		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
+		// then parse ip
+		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
+		if err != nil {
+			log.Info("Can't get BMH credentials")
+			return nil, nil, nil, err
+		}
+		credentialsParams = append(credentialsParams, "--username", "--password")
+		testShareParam = map[v1alpha1.ParameterName]string{
+			"--ip":      "192.168.111.1",
+			"--action":  action,
+			"--lanplus": "",
+		}
+		secrets["--username"] = username
+		secrets["--password"] = password
+	}
+	return testShareParam, credentialsParams, secrets, nil
 }
 
 // buildNodeParameters returns a map key-value of node parameters based on cluster platform type if it finds the node info list, otherwise an error
@@ -314,17 +412,18 @@ func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, te
 }
 
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
-func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType, credentialsParams []v1alpha1.ParameterName) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
-			Agent:               agent,
-			SharedParameters:    sharedParameters,
-			NodeParameters:      nodeParameters,
-			RemediationStrategy: strategy,
-			RetryCount:          10,
-			RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
-			Timeout:             metav1.Duration{Duration: 60 * time.Second},
+			Agent:                agent,
+			SharedParameters:     sharedParameters,
+			NodeParameters:       nodeParameters,
+			RemediationStrategy:  strategy,
+			CredentialParameters: credentialsParams,
+			RetryCount:           10,
+			RetryInterval:        metav1.Duration{Duration: 20 * time.Second},
+			Timeout:              metav1.Duration{Duration: 60 * time.Second},
 		},
 	}
 	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
