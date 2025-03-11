@@ -121,6 +121,8 @@ var _ = Describe("FAR E2e", func() {
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
+		})
+		JustBeforeEach(func() {
 			// create tested pod which will be deleted by the far CR
 			pod = createTestedPod(nodeName)
 			DeferCleanup(cleanupTestedResources, pod)
@@ -133,14 +135,10 @@ var _ = Describe("FAR E2e", func() {
 			DeferCleanup(deleteFAR, far)
 		})
 		When("running FAR to reboot two nodes", func() {
-			It("should successfully remediate the first node", func() {
+			It("should successfully remediate node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
-			/*It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
-			})*/
 		})
 	}
 
