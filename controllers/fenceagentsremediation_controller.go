@@ -55,7 +55,7 @@ const (
 	SuccessFAResponse    = "Success: Rebooted"
 	parameterActionName  = "--action"
 	parameterActionValue = "reboot"
-	DefaultSecretName    = "defaultSecret"
+	DefaultSecretName    = "default-secret"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
