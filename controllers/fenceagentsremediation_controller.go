@@ -238,9 +238,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		cmd := append([]string{far.Spec.Agent}, faParams...)
-		//TODO mshitrit we shouldn't log secrets
-		//TODO remove the below change after testing
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "command", cmd)
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Shared Parameters", far.Spec.SharedParameters, "Node Parameters", far.Spec.NodeParameters, "Credential Parameters", far.Spec.CredentialParameters)
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -381,8 +379,7 @@ func resolveParameterValueFromSecret(ctx context.Context, c client.Client, far *
 	if !exists {
 		return "", fmt.Errorf("secret key `%s` was not found in secret `%s` at namespace `%s`", paramName, secretName, far.Namespace)
 	}
-	//TODO mshitrit we should probably not print the secret value to the log
-	logger.Info("found a value from secret", "secret name", secretName, "paramter mame", string(paramName), "secret value", secretValue)
+	logger.Info("found a value from secret", "secret name", secretName, "parameter name", string(paramName))
 
 	return string(secretValue), nil
 }
