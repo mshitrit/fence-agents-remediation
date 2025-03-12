@@ -167,7 +167,7 @@ var _ = Describe("FAR E2e", func() {
 					Type: corev1.SecretTypeOpaque,
 				}
 				Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
-
+				//TODO mshitrit cleanup the secret
 				DeferCleanup(func() {
 					testShareParam = nil
 					testNodeParam = nil
