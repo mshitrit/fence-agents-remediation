@@ -58,13 +58,6 @@ spec:
                           It should have a fence_ prefix.
                         pattern: fence_.+
                         type: string
-                      credentialparameters:
-                        description: |-
-                          CredentialParameters are passed to the fencing agent according to the node that is fenced, and the parameters
-                          values are fetched from a known secret
-                        items:
-                          type: string
-                        type: array
                       nodeparameters:
                         additionalProperties:
                           additionalProperties:

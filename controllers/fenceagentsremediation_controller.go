@@ -50,12 +50,12 @@ const (
 	// errors
 	errorMissingParams      = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams  = "node parameter is required, and cannot be empty"
-	errorFailFetchingSecret = "failed to fetch secret key `%s` from secret `%s` at namespace `%s`: %w"
+	errorFailFetchingSecret = "failed to fetch secret `%s` at namespace `%s`: %w"
 
 	SuccessFAResponse    = "Success: Rebooted"
 	parameterActionName  = "--action"
 	parameterActionValue = "reboot"
-	DefaultSecretName    = "default-secret"
+	SharedSecretName     = "shared-secret"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -231,14 +231,19 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, err := buildFenceAgentParams(far, ctx, r.Client)
+		secretParams, err := r.collectSecretParams(far, ctx)
+		if err != nil {
+			r.Log.Error(err, "Failed collecting secrets data", "Node Name", node.Name, "CR Name", req.Name)
+			return emptyResult, err
+		}
+		faParams, err := buildFenceAgentParams(far, secretParams)
 		if err != nil {
 			r.Log.Error(err, "Invalid credential/shared/node parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
 		}
 
 		cmd := append([]string{far.Spec.Agent}, faParams...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Shared Parameters", far.Spec.SharedParameters, "Node Parameters", far.Spec.NodeParameters, "Credential Parameters", far.Spec.CredentialParameters)
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Shared Parameters", far.Spec.SharedParameters, "Node Parameters", far.Spec.NodeParameters)
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -330,6 +335,44 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
+func (r *FenceAgentsRemediationReconciler) collectSecretParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context) (map[string]string, error) {
+	secretParams := map[string]string{}
+	nodeSecretName := far.Name
+	// fetch secret/node name from remediation's annotation if present
+	if annotatedName, exist := far.Annotations["remediation.medik8s.io/node-name"]; exist {
+		nodeSecretName = annotatedName
+	}
+	nodeSecret, err := r.getParamSecret(ctx, client.ObjectKey{Name: nodeSecretName, Namespace: far.Namespace})
+	if err != nil && !apiErrors.IsNotFound(err) {
+		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
+		return nil, fmt.Errorf(errorFailFetchingSecret, nodeSecretName, far.Namespace, err)
+	}
+
+	sharedSecret, err := r.getParamSecret(ctx, client.ObjectKey{Name: SharedSecretName, Namespace: far.Namespace})
+	if err != nil && !apiErrors.IsNotFound(err) {
+		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
+		return nil, fmt.Errorf(errorFailFetchingSecret, SharedSecretName, far.Namespace, err)
+	}
+
+	//Fill secret params from shared secret
+	if sharedSecret != nil {
+		for secretKey, secretVal := range sharedSecret.Data {
+			secretParams[secretKey] = string(secretVal)
+			r.Log.Info("found a value from secret", "secret name", SharedSecretName, "parameter name", secretKey)
+		}
+	}
+
+	//Fill secret params from node secret
+	if nodeSecret != nil {
+		for secretKey, secretVal := range nodeSecret.Data {
+			secretParams[secretKey] = string(secretVal)
+			r.Log.Info("found a value from secret", "secret name", nodeSecretName, "parameter name", secretKey)
+		}
+	}
+
+	return secretParams, nil
+}
+
 // getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	ann := far.GetAnnotations()
@@ -342,51 +385,18 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
-// fetchSecret fetches a secret and returns an error on failure
-func fetchSecret(ctx context.Context, c client.Client, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
+// getParamSecret gets a secret containing key value params and returns an error on failure
+func (r *FenceAgentsRemediationReconciler) getParamSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
-	if err := c.Get(ctx, secretKeyObj, secret); err != nil {
+	if err := r.Get(ctx, secretKeyObj, secret); err != nil {
 		return nil, err
 	}
 	return secret, nil
 }
 
-// resolveParameterValueFromSecret resolve parameter value from secret if exist, otherwise returns an error
-func resolveParameterValueFromSecret(ctx context.Context, c client.Client, far *v1alpha1.FenceAgentsRemediation, paramName v1alpha1.ParameterName) (string, error) {
-	var secret *corev1.Secret
-	var err error
-	logger := ctrl.Log.WithName("resolve-value-from-secret")
-	secretName := far.Name
-	// fetch secret/node name from remediation's annotation if present
-	if annotatedName, exist := far.Annotations["remediation.medik8s.io/node-name"]; exist {
-		secretName = annotatedName
-	}
-	secret, err = fetchSecret(ctx, c, client.ObjectKey{Name: secretName, Namespace: far.Namespace})
-	if err != nil {
-		if apiErrors.IsNotFound(err) {
-			// when there is no specefic secret, then we try the default secret
-			logger.Info("secret is missing - try default secret", "secret name", secretName, "default secret", DefaultSecretName, "namespace", far.Namespace, "paramter mame", string(paramName))
-			secretName = DefaultSecretName
-			secret, err = fetchSecret(ctx, c, client.ObjectKey{Name: secretName, Namespace: far.Namespace})
-		}
-		if err != nil {
-			logger.Error(err, "failed to fetch secret", "secret name", secretName, "namespace", far.Namespace)
-			return "", fmt.Errorf(errorFailFetchingSecret, paramName, secretName, far.Namespace, err)
-		}
-	}
-	// Extract the secret value
-	secretValue, exists := secret.Data[string(paramName)]
-	if !exists {
-		return "", fmt.Errorf("secret key `%s` was not found in secret `%s` at namespace `%s`", paramName, secretName, far.Namespace)
-	}
-	logger.Info("found a value from secret", "secret name", secretName, "parameter name", string(paramName))
-
-	return string(secretValue), nil
-}
-
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context, c client.Client) ([]string, error) {
+func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
 		err := errors.New(errorMissingParams)
@@ -394,16 +404,24 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Con
 		return nil, err
 	}
 	var fenceAgentParams []string
+	//this map is used to verify there are not parameters which are defined twice
 	fenceAgentParamNames := make(map[v1alpha1.ParameterName]bool)
 
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
+		//Verify action must be reboot
 		if paramName == parameterActionName && paramVal != parameterActionValue {
 			// --action parameter with a differnet value from reboot is not supported
 			err := errors.New("FAR doesn't support any other action than reboot")
 			logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
 			return nil, err
-		} else if _, exist := fenceAgentParamNames[paramName]; !exist {
+		}
+		//Verify param isn't already defined
+		if _, exist := fenceAgentParamNames[paramName]; exist {
+			err := errors.New("invalid multiple definition of FAR shared param")
+			logger.Error(err, "can't build fence agents params shared param is defined multiple times", "shared param name", paramName)
+			return nil, err
+		} else { //Not defined, add it
 			fenceAgentParamNames[paramName] = true
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		}
@@ -424,16 +442,12 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Con
 		}
 	}
 
-	// append credential parameters
-	for _, paramName := range far.Spec.CredentialParameters {
-		resolvedVal, err := resolveParameterValueFromSecret(ctx, c, far, paramName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve credential parameter: %w", err)
-		} else {
-			if _, exist := fenceAgentParamNames[paramName]; !exist {
-				fenceAgentParamNames[paramName] = true
-				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, resolvedVal)
-			}
+	// append secret parameters
+	for secretKey, secretVal := range secretParams {
+		secretParam := v1alpha1.ParameterName(secretKey)
+		if _, exist := fenceAgentParamNames[secretParam]; !exist {
+			fenceAgentParamNames[secretParam] = true
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, secretParam, secretVal)
 		}
 	}
 

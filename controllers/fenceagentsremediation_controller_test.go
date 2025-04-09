@@ -66,16 +66,6 @@ var _ = Describe("FAR Controller", func() {
 		credentialSecret = &corev1.Secret{}
 	)
 
-	testCredentialParam := []v1alpha1.ParameterName{
-		"--pass",
-		"--pass2",
-	}
-	invalidCredentialParam := []v1alpha1.ParameterName{
-		"--pass",
-		"--no-pass",
-	}
-	emptyCredentialParam := []v1alpha1.ParameterName{}
-
 	noActionShareParam := map[v1alpha1.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
@@ -110,16 +100,16 @@ var _ = Describe("FAR Controller", func() {
 	Context("Functionality", func() {
 		BeforeEach(func() {
 			plogs.Clear()
-			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, emptyCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
+			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 		})
 		Context("buildFenceAgentParams", func() {
 			When("FAR CR misses the action parameter", func() {
 				It("should succeed and add the action parameter with value reboot", func() {
-					testFARNoAction := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, noActionShareParam, testNodeParam, emptyCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					noActionShareString, err := buildFenceAgentParams(testFARNoAction, context.Background(), k8sClient)
+					testFARNoAction := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, noActionShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					noActionShareString, err := buildFenceAgentParams(testFARNoAction, map[string]string{})
 					Expect(err).NotTo(HaveOccurred())
 					underTestFAR.ObjectMeta.Name = workerNode
-					validShareString, err := buildFenceAgentParams(underTestFAR, context.Background(), k8sClient)
+					validShareString, err := buildFenceAgentParams(underTestFAR, map[string]string{})
 					Expect(err).NotTo(HaveOccurred())
 					// Eventually buildFenceAgentParams would return the same shareParam
 					Expect(noActionShareString).To(ConsistOf(validShareString))
@@ -128,7 +118,7 @@ var _ = Describe("FAR Controller", func() {
 			When("FAR CR's name doesn't match a node name", func() {
 				It("should fail", func() {
 					underTestFAR.ObjectMeta.Name = dummyNode
-					_, err := buildFenceAgentParams(underTestFAR, context.Background(), k8sClient)
+					_, err := buildFenceAgentParams(underTestFAR, map[string]string{})
 					Expect(err).To(HaveOccurred())
 					Expect(err).To(Equal(errors.New(errorMissingNodeParams)))
 				})
@@ -136,13 +126,13 @@ var _ = Describe("FAR Controller", func() {
 			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = workerNode
-					Expect(buildFenceAgentParams(underTestFAR, context.Background(), k8sClient)).Error().NotTo(HaveOccurred())
+					Expect(buildFenceAgentParams(underTestFAR, map[string]string{})).Error().NotTo(HaveOccurred())
 				})
 			})
 			When("FAR CR includes the 'ipport' parameter twice", func() {
 				It("should succeed with ipport `6233`", func() {
-					doublePortTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, emptyCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					Expect(buildFenceAgentParams(doublePortTestFAR, context.Background(), k8sClient)).Error().NotTo(HaveOccurred())
+					doublePortTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					Expect(buildFenceAgentParams(doublePortTestFAR, map[string]string{})).Error().NotTo(HaveOccurred())
 					// Eventually(func(g Gomega) {
 					// 	g.Expect(storedCommand).To(ConsistOf([]string{
 					// 		"fence_ipmilan",
@@ -161,7 +151,7 @@ var _ = Describe("FAR Controller", func() {
 	Context("Reconcile with ResourceDeletion strategy", func() {
 		farRemediationTaint := utils.CreateRemediationTaint()
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
-		underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, testCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
+		underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 		BeforeEach(func() {
 			// Create two pods and at the end clean them up with DeferCleanup
 			testPod := createRunningPod("far-test-1", testPodName, workerNode)
@@ -225,7 +215,7 @@ var _ = Describe("FAR Controller", func() {
 			}
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, testCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			When("node name is stored in remediation name", func() {
 				It("should have finalizer and taint, while the tested pod will be deleted", testSuccessfulRemediation)
@@ -240,45 +230,10 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
-		When("creating invalid FAR secret parameter", func() {
-			BeforeEach(func() {
-				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, invalidCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
-			})
-
-			It("should have a finalizer and taint, while the tested pod will remain", func() {
-				underTestFAR = verifyPreRemediationSucceed(underTestFAR, defaultNamespace, &farRemediationTaint)
-				// TODO: catch the error message?
-
-				// Eventually(func(g Gomega) {
-				// 	g.Expect(storedCommand).To(ConsistOf([]string{
-				// 		"fence_ipmilan",
-				// 		"--lanplus",
-				// 		"--password=password",
-				// 		"--username=admin",
-				// 		"--action=reboot",
-				// 		"--ip=192.168.111.1",
-				// 		"--ipport=6233"}))
-				// }, timeoutPreRemediation, pollInterval).Should(Succeed())
-
-				By("Still having one test pod")
-				verifyPodExists(testPodName)
-
-				By("Verifying correct conditions for unsuccessful remediation")
-				verifyRemediationConditions(
-					underTestFAR,
-					conditionStatusPointer(metav1.ConditionTrue),  // ProcessingTypeStatus
-					conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
-					conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
-				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventReasonNodeRemediationCompleted)
-			})
-		})
-
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam, emptyCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			It("should not have a finalizer nor taint, while the tested pod will remain", func() {
@@ -316,7 +271,7 @@ var _ = Describe("FAR Controller", func() {
 			BeforeEach(func() {
 				plogs.Clear()
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, emptyCredentialParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			When("CR is deleted in between fence agent retries", func() {
@@ -467,7 +422,7 @@ var _ = Describe("FAR Controller", func() {
 		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, emptyCredentialParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
 			})
 
 			It("should have finalizer, both remediation taint and out-of-service taint, and at the end they will be deleted", func() {
@@ -515,14 +470,13 @@ var _ = Describe("FAR Controller", func() {
 })
 
 // getFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
-func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, credentialparameters []v1alpha1.ParameterName, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
-			Agent:                agent,
-			SharedParameters:     sharedparameters,
-			NodeParameters:       nodeparameters,
-			CredentialParameters: credentialparameters,
+			Agent:            agent,
+			SharedParameters: sharedparameters,
+			NodeParameters:   nodeparameters,
 			// Set the retry count to the minimum for the majority of the tests
 			RetryCount:          1,
 			RetryInterval:       metav1.Duration{Duration: 5 * time.Second},

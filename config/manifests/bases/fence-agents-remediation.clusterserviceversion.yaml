@@ -35,11 +35,6 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: agent
-      - description: CredentialParameters are passed to the fencing agent according
-          to the node that is fenced, and the parameters values are fetched from a
-          known secret
-        displayName: Credential Parameters
-        path: credentialparameters
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -96,11 +91,6 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
-      - description: CredentialParameters are passed to the fencing agent according
-          to the node that is fenced, and the parameters values are fetched from a
-          known secret
-        displayName: Credential Parameters
-        path: template.spec.credentialparameters
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters

@@ -90,11 +90,6 @@ type FenceAgentsRemediationSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeParameters map[ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
 
-	// CredentialParameters are passed to the fencing agent according to the node that is fenced, and the parameters
-	// values are fetched from a known secret
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	CredentialParameters []ParameterName `json:"credentialparameters,omitempty"`
-
 	// RemediationStrategy is the remediation method for unhealthy nodes.
 	// Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
 	// ResourceDeletion will iterate over all pods related to the unhealthy node and delete them.

@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"math/rand"
+	"os"
 	"time"
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
@@ -31,7 +32,6 @@ const (
 	fenceAgentAction         = "reboot"
 	nodeIdentifierPrefixAWS  = "--plug"
 	nodeIdentifierPrefixIPMI = "--ipport"
-	containerName            = "manager"
 	testContainerName        = "test-container"
 	testPodName              = "test-pod"
 
@@ -47,46 +47,21 @@ const (
 )
 
 var (
-	stopTesting      bool
-	remediationTimes []time.Duration
+	stopTesting                      bool
+	remediationTimes                 []time.Duration
+	fenceAgent, nodeIdentifierPrefix string
+	clusterPlatform                  *configv1.Infrastructure
 )
 
 var _ = Describe("FAR E2e", func() {
 	var (
-		fenceAgent, nodeIdentifierPrefix string
-		testShareParam                   map[v1alpha1.ParameterName]string
-		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
-		credentialsParams                []v1alpha1.ParameterName
-		clusterPlatform                  *configv1.Infrastructure
+		testShareParam map[v1alpha1.ParameterName]string
+		testNodeParam  map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 	)
 	BeforeEach(func() {
-		//Building the params once for all of the tests
-		if testShareParam != nil && testNodeParam != nil {
-			return
-		}
-		// create FAR CR spec based on OCP platformn
+		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentAction)
 		var err error
-		clusterPlatform, err = e2eUtils.GetClusterInfo(configClient)
-		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
-		log.Info("Getting Cluster Infromation", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
-
-		switch clusterPlatform.Status.PlatformStatus.Type {
-		case configv1.AWSPlatformType:
-			fenceAgent = fenceAgentAWS
-			nodeIdentifierPrefix = nodeIdentifierPrefixAWS
-			By("running fence_aws")
-		case configv1.BareMetalPlatformType:
-			fenceAgent = fenceAgentIPMI
-			nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
-			By("running fence_ipmilan")
-		default:
-			stopTesting = true // Mark to stop subsequent tests
-			Fail("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
-		}
-
-		testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
-		Expect(err).ToNot(HaveOccurred(), "can't get shared information")
-		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
+		testNodeParam, err = buildNodeParameters()
 		Expect(err).ToNot(HaveOccurred(), "can't get node information")
 	})
 
@@ -134,43 +109,25 @@ var _ = Describe("FAR E2e", func() {
 			makeNodeUnready(selectedNode)
 
 			startTime = time.Now()
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy, credentialsParams)
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
 			DeferCleanup(deleteFAR, far)
 		})
-		When("running FAR with full credentials as plain text (Legacy)", func() {
+		When("running FAR to reboot a node with secrets in shared parameters (legacy)", func() {
+			BeforeEach(func() {
+				testShareParam = addSecretsToSharedParams(testShareParam)
+			})
 			It("should successfully remediate the node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
+
 		When("running FAR with credentials in Secret", func() {
 			BeforeEach(func() {
-
-				//Reset Params so they may be cleaned re-initialized in the next test
-				//TODO mshitrit continue here, build the secret
-				var secretData map[string]string
-
-				testShareParam, credentialsParams, secretData, _ = buildSecureParameters(clusterPlatform, fenceAgentAction)
-
-				// Convert string map to byte map
-				dataBytes := make(map[string][]byte)
-				for key, value := range secretData {
-					dataBytes[key] = []byte(value)
-				}
-				//using default secret
-				secret := &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "default-secret",
-						Namespace: operatorNsName,
-					},
-					Data: dataBytes,
-					Type: corev1.SecretTypeOpaque,
-				}
+				secret := generateSecretResource()
 				Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
-				//TODO mshitrit cleanup the secret
 				DeferCleanup(func() {
-					testShareParam = nil
-					testNodeParam = nil
+					Expect(k8sClient.Delete(context.TODO(), secret)).To(Succeed())
 				})
 			})
 			It("should successfully remediate the node", func() {
@@ -180,16 +137,16 @@ var _ = Describe("FAR E2e", func() {
 		})
 	}
 
-	FContext("stress cluster with ResourceDeletion remediation strategy", func() {
+	Context("stress cluster with ResourceDeletion remediation strategy", func() {
 		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, func() bool { return false })
 	})
 
-	/*Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
+	Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
 		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
-	})*/
+	})
 })
 
 var _ = AfterSuite(func() {
@@ -205,139 +162,47 @@ var _ = AfterSuite(func() {
 })
 
 // buildSharedParameters returns a map key-value of shared parameters based on cluster platform type if it finds the credentials, otherwise an error
-func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) (map[v1alpha1.ParameterName]string, error) {
-	const (
-		//AWS
-		secretAWSName      = "aws-cloud-fencing-credentials-secret"
-		secretAWSNamespace = "openshift-operators"
-		secretKeyAWS       = "aws_access_key_id"
-		secretValAWS       = "aws_secret_access_key"
-
-		// BareMetal
-		//TODO: secret BM should be based on node name - > oc get bmh -n openshift-machine-api BM_NAME -o jsonpath='{.spec.bmc.credentialsName}'
-		secretBMHName      = "ostest-master-0-bmc-secret"
-		secretBMHNamespace = "openshift-machine-api"
-		secretKeyBM        = "username"
-		secretValBM        = "password"
-	)
+func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) map[v1alpha1.ParameterName]string {
 	var testShareParam map[v1alpha1.ParameterName]string
 
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
 	if clusterPlatformType == configv1.AWSPlatformType {
-		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
-		if err != nil {
-			log.Info("Can't get AWS credentials")
-			return nil, err
-		}
 
 		// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.aws.region}'
-		regionAWS := string(clusterPlatform.Status.PlatformStatus.AWS.Region)
+		regionAWS := clusterPlatform.Status.PlatformStatus.AWS.Region
 
 		testShareParam = map[v1alpha1.ParameterName]string{
-			"--access-key":      accessKey,
-			"--secret-key":      secretKey,
 			"--region":          regionAWS,
 			"--action":          action,
 			"--skip-race-check": "",
 			// "--verbose":    "", // for verbose result
 		}
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
-		// TODO : get ip from GetCredientals
-		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
-		// then parse ip
-		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
-		if err != nil {
-			log.Info("Can't get BMH credentials")
-			return nil, err
-		}
-		testShareParam = map[v1alpha1.ParameterName]string{
-			"--username": username,
-			"--password": password,
-			"--ip":       "192.168.111.1",
-			"--action":   action,
-			"--lanplus":  "",
-		}
-	}
-	return testShareParam, nil
-}
-
-// TODO mshitrit refactor getting the platform secrets in a separate method
-func buildSecureParameters(clusterPlatform *configv1.Infrastructure, action string) (map[v1alpha1.ParameterName]string, []v1alpha1.ParameterName, map[string]string, error) {
-	const (
-		//AWS
-		secretAWSName      = "aws-cloud-fencing-credentials-secret"
-		secretAWSNamespace = "openshift-operators"
-		secretKeyAWS       = "aws_access_key_id"
-		secretValAWS       = "aws_secret_access_key"
-
-		// BareMetal
-		//TODO: secret BM should be based on node name - > oc get bmh -n openshift-machine-api BM_NAME -o jsonpath='{.spec.bmc.credentialsName}'
-		secretBMHName      = "ostest-master-0-bmc-secret"
-		secretBMHNamespace = "openshift-machine-api"
-		secretKeyBM        = "username"
-		secretValBM        = "password"
-	)
-	secrets := map[string]string{}
-	var credentialsParams []v1alpha1.ParameterName
-	testShareParam := map[v1alpha1.ParameterName]string{}
-	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
-	if clusterPlatform.Status.PlatformStatus.Type == configv1.AWSPlatformType {
-		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
-		if err != nil {
-			log.Info("Can't get AWS credentials")
-			return nil, nil, nil, err
-		}
-
-		// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.aws.region}'
-		regionAWS := string(clusterPlatform.Status.PlatformStatus.AWS.Region)
-		credentialsParams = append(credentialsParams, "--access-key", "--secret-key")
-		testShareParam = map[v1alpha1.ParameterName]string{
-			"--region":          regionAWS,
-			"--action":          action,
-			"--skip-race-check": "",
-			// "--verbose":    "", // for verbose result
-		}
-		secrets["--access-key"] = accessKey
-		secrets["--secret-key"] = secretKey
-
-	} else if clusterPlatform.Status.PlatformStatus.Type == configv1.BareMetalPlatformType {
-		// TODO : get ip from GetCredientals
-		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
-		// then parse ip
-		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
-		if err != nil {
-			log.Info("Can't get BMH credentials")
-			return nil, nil, nil, err
-		}
-		credentialsParams = append(credentialsParams, "--username", "--password")
 		testShareParam = map[v1alpha1.ParameterName]string{
 			"--ip":      "192.168.111.1",
 			"--action":  action,
 			"--lanplus": "",
 		}
-		secrets["--username"] = username
-		secrets["--password"] = password
 	}
-	return testShareParam, credentialsParams, secrets, nil
+	return testShareParam
 }
 
 // buildNodeParameters returns a map key-value of node parameters based on cluster platform type if it finds the node info list, otherwise an error
-func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, error) {
+func buildNodeParameters() (map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, error) {
 	var (
-		testNodeParam  map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 		nodeListParam  map[v1alpha1.NodeName]string
 		nodeIdentifier v1alpha1.ParameterName
 		err            error
 	)
-
+	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
 	if clusterPlatformType == configv1.AWSPlatformType {
 		nodeListParam, err = e2eUtils.GetAWSNodeInfoList(machineClient)
 		if err != nil {
 			log.Info("Can't get nodes' information - AWS instance ID is missing")
 			return nil, err
 		}
-		nodeIdentifier = v1alpha1.ParameterName(nodeIdentifierPrefixAWS)
+		nodeIdentifier = nodeIdentifierPrefixAWS
 
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
 		nodeListParam, err = e2eUtils.GetBMHNodeInfoList(machineClient)
@@ -345,9 +210,9 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 			log.Info("Can't get nodes' information - ports are missing")
 			return nil, err
 		}
-		nodeIdentifier = v1alpha1.ParameterName(nodeIdentifierPrefixIPMI)
+		nodeIdentifier = nodeIdentifierPrefixIPMI
 	}
-	testNodeParam = map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{nodeIdentifier: nodeListParam}
+	testNodeParam := map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{nodeIdentifier: nodeListParam}
 	return testNodeParam, nil
 }
 
@@ -412,18 +277,17 @@ func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, te
 }
 
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
-func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType, credentialsParams []v1alpha1.ParameterName) *v1alpha1.FenceAgentsRemediation {
+func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
-			Agent:                agent,
-			SharedParameters:     sharedParameters,
-			NodeParameters:       nodeParameters,
-			RemediationStrategy:  strategy,
-			CredentialParameters: credentialsParams,
-			RetryCount:           10,
-			RetryInterval:        metav1.Duration{Duration: 20 * time.Second},
-			Timeout:              metav1.Duration{Duration: 60 * time.Second},
+			Agent:               agent,
+			SharedParameters:    sharedParameters,
+			NodeParameters:      nodeParameters,
+			RemediationStrategy: strategy,
+			RetryCount:          10,
+			RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 		},
 	}
 	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
@@ -474,7 +338,7 @@ func waitForNodeHealthyCondition(node *corev1.Node, condStatus corev1.ConditionS
 				return cond.Status
 			}
 		}
-		return corev1.ConditionStatus("failure")
+		return "failure"
 	}, timeoutReboot, pollReboot).Should(Equal(condStatus))
 }
 
@@ -512,7 +376,7 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 	log.Info("successful reboot", "node", nodeName, "offset between last boot", nodeBootTimeAfter.Sub(nodeBootTimeBefore), "new boot time", nodeBootTimeAfter)
 }
 
-// checkPodDeleted vefifies if the pod has already been deleted due to resource deletion
+// checkPodDeleted verifies if the pod has already been deleted due to resource deletion
 func checkPodDeleted(pod *corev1.Pod) {
 	ConsistentlyWithOffset(1, func() bool {
 		newPod := &corev1.Pod{}
@@ -560,4 +424,90 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 	verifyStatusCondition(nodeName, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 	verifyStatusCondition(nodeName, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 	verifyStatusCondition(nodeName, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
+}
+
+// preTestsSetup will initialize values with are required in all of the tests before the suite is run
+func preTestsSetup() {
+	//Building the params once for all of the tests
+	var err error
+	clusterPlatform, err = e2eUtils.GetClusterInfo(configClient)
+	Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
+	log.Info("Getting Cluster Information", "Cluster name", clusterPlatform.Name, "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
+
+	//Set up the proper fence agent so we can use the param names that match the agents
+	setFenceAgentParams(clusterPlatform.Status.PlatformStatus.Type)
+
+	//Populate the secret map which will be retrieved according to the cluster type
+	secretMap, err = buildSecretMap(clusterPlatform)
+	Expect(err).ToNot(HaveOccurred())
+
+}
+
+func setFenceAgentParams(platformType configv1.PlatformType) {
+	switch platformType {
+	case configv1.AWSPlatformType:
+		fenceAgent = fenceAgentAWS
+		nodeIdentifierPrefix = nodeIdentifierPrefixAWS
+		By("running fence_aws")
+	case configv1.BareMetalPlatformType:
+		fenceAgent = fenceAgentIPMI
+		nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
+		By("running fence_ipmilan")
+	default:
+		stopTesting = true // Mark to stop subsequent tests
+		Fail("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
+	}
+}
+
+func buildSecretMap(clusterPlatform *configv1.Infrastructure) (map[string]string, error) {
+	secrets := map[string]string{}
+	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
+	if clusterPlatform.Status.PlatformStatus.Type == configv1.AWSPlatformType {
+		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, "aws-cloud-fencing-credentials-secret", "openshift-operators", "aws_access_key_id", "aws_secret_access_key")
+		if err != nil {
+			log.Info("Can't get AWS credentials")
+			return nil, err
+		}
+		secrets["--access-key"] = accessKey
+		secrets["--secret-key"] = secretKey
+
+	} else if clusterPlatform.Status.PlatformStatus.Type == configv1.BareMetalPlatformType {
+		//TODO: secret BM should be based on node name - > oc get bmh -n openshift-machine-api BM_NAME -o jsonpath='{.spec.bmc.credentialsName}'
+		secretBMHName := "ostest-master-0-bmc-secret"
+		// TODO : get ip from GetCredientals
+		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
+		// then parse ip
+		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, "openshift-machine-api", "username", "password")
+		if err != nil {
+			log.Info("Can't get BMH credentials")
+			return nil, err
+		}
+		secrets["--username"] = username
+		secrets["--password"] = password
+	}
+	return secrets, nil
+}
+
+func addSecretsToSharedParams(testShareParam map[v1alpha1.ParameterName]string) map[v1alpha1.ParameterName]string {
+	for key, value := range secretMap {
+		testShareParam[v1alpha1.ParameterName(key)] = value
+	}
+	return testShareParam
+}
+
+func generateSecretResource() *corev1.Secret {
+	dataBytes := make(map[string][]byte)
+	for key, value := range secretMap {
+		dataBytes[key] = []byte(value)
+	}
+	//using shared secret
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "shared-secret",
+			Namespace: operatorNsName,
+		},
+		Data: dataBytes,
+		Type: corev1.SecretTypeOpaque,
+	}
+	return secret
 }

@@ -39,10 +39,11 @@ var (
 	machineClient *machineclient.Clientset
 
 	// The ns the operator is running in
-	operatorNsName = "openshift-workload-availability"
+	operatorNsName string
 
 	// The ns test pods are started in
 	testNsName = "far-test"
+	secretMap  map[string]string
 )
 
 func TestE2e(t *testing.T) {
@@ -51,14 +52,15 @@ func TestE2e(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	_ = os.Setenv("KUBECONFIG", "/home/mshitrit/clusters-config/dsl/bm/kubeconfig")
-
 	opts := zap.Options{
 		Development: true,
 		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
 	}
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
 	log = logf.Log
+
+	operatorNsName = os.Getenv(operatorInstalledNamespcae)
+	Expect(operatorNsName).ToNot(BeEmpty(), operatorInstalledNamespcae+" env var not set, can't start e2e test")
 
 	// +kubebuilder:scaffold:scheme
 
@@ -107,7 +109,7 @@ var _ = BeforeSuite(func() {
 		err = k8sClient.Create(context.Background(), testNs)
 	}
 	Expect(err).ToNot(HaveOccurred(), "could not get or create test ns")
-
+	preTestsSetup()
 	debug()
 })
 
