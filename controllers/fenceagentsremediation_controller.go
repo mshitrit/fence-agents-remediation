@@ -343,13 +343,13 @@ func (r *FenceAgentsRemediationReconciler) collectSecretParams(far *v1alpha1.Fen
 		nodeName = annotatedName
 	}
 	nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)
-	nodeSecret, err := r.getParamSecret(ctx, client.ObjectKey{Name: nodeSecretName, Namespace: far.Namespace})
+	nodeSecret, err := r.getSecret(ctx, client.ObjectKey{Name: nodeSecretName, Namespace: far.Namespace})
 	if err != nil && !apiErrors.IsNotFound(err) {
 		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
 		return nil, fmt.Errorf(errorFailFetchingSecret, nodeSecretName, far.Namespace, err)
 	}
 
-	sharedSecret, err := r.getParamSecret(ctx, client.ObjectKey{Name: SharedSecretName, Namespace: far.Namespace})
+	sharedSecret, err := r.getSecret(ctx, client.ObjectKey{Name: SharedSecretName, Namespace: far.Namespace})
 	if err != nil && !apiErrors.IsNotFound(err) {
 		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
 		return nil, fmt.Errorf(errorFailFetchingSecret, SharedSecretName, far.Namespace, err)
@@ -386,8 +386,8 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
-// getParamSecret gets a secret containing key value params and returns an error on failure
-func (r *FenceAgentsRemediationReconciler) getParamSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
+// getSecret gets a secret returns an error on failure
+func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
 	if err := r.Get(ctx, secretKeyObj, secret); err != nil {
 		return nil, err
