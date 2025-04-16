@@ -165,7 +165,7 @@ var _ = Describe("FAR Controller", func() {
 			// Create node, and FAR CR, and at the end clean them up with DeferCleanup
 			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), node)
-			credentialSecret = getSecret(workerNode)
+			credentialSecret = generateSecret(fmt.Sprintf("fence-agents-credentials-node-%s", workerNode))
 			Expect(k8sClient.Create(context.Background(), credentialSecret)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), credentialSecret)
 
@@ -486,8 +486,8 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 	}
 }
 
-// getSecret assigns the input to the FenceAgentsRemediation
-func getSecret(nodeName string) *corev1.Secret {
+// generateSecret assigns the input to the FenceAgentsRemediation
+func generateSecret(nodeName string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
 		Data: map[string][]byte{
