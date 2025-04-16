@@ -399,11 +399,6 @@ func (r *FenceAgentsRemediationReconciler) getParamSecret(ctx context.Context, s
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
-	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
-		err := errors.New(errorMissingParams)
-		logger.Error(err, "Missing parameters")
-		return nil, err
-	}
 	var fenceAgentParams []string
 	//this map is used to verify there are not parameters which are defined twice
 	fenceAgentParamNames := make(map[v1alpha1.ParameterName]bool)
@@ -450,6 +445,12 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			fenceAgentParamNames[secretParam] = true
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, secretParam, secretVal)
 		}
+	}
+
+	if len(fenceAgentParamNames) == 0 {
+		err := errors.New(errorMissingParams)
+		logger.Error(err, "Missing parameters")
+		return nil, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
