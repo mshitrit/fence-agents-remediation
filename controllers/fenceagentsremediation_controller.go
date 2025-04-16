@@ -55,7 +55,7 @@ const (
 	SuccessFAResponse    = "Success: Rebooted"
 	parameterActionName  = "--action"
 	parameterActionValue = "reboot"
-	SharedSecretName     = "shared-secret"
+	SharedSecretName     = "fence-agents-credentials-shared"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object

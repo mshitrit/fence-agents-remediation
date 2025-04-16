@@ -503,7 +503,7 @@ func generateSecretResource() *corev1.Secret {
 	//using shared secret
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "shared-secret",
+			Name:      "fence-agents-credentials-shared",
 			Namespace: operatorNsName,
 		},
 		Data: dataBytes,
