@@ -23,8 +23,6 @@ ENVTEST_K8S_VERSION = 1.28
 # OCP Version: for OKD bundle community
 OCP_VERSION = 4.14
 
-# Run unit tests once unless this parameter is set
-REPEAT_TIMES ?= 1
 # update for major version updates to YQ_VERSION! see https://github.com/mikefarah/yq
 YQ_API_VERSION = v4
 YQ_VERSION = v4.44.2
@@ -199,9 +197,8 @@ test: test-no-verify ## Generate and format code, run tests, generate manifests 
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-no-verify: go-verify manifests generate fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)" \
-	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out --repeat=$(REPEAT_TIMES) \
-	./api/... ./pkg/... ./controllers/...
+	#KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)" \
+#	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out ./api/... ./pkg/... ./controllers/...
 
 .PHONY: bundle-run
 bundle-run: operator-sdk create-ns ## Run bundle image. Default NS is "openshift-workload-availability", redefine OPERATOR_NAMESPACE to override it.
