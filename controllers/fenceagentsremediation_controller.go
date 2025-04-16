@@ -337,11 +337,12 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 
 func (r *FenceAgentsRemediationReconciler) collectSecretParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context) (map[string]string, error) {
 	secretParams := map[string]string{}
-	nodeSecretName := far.Name
+	nodeName := far.Name
 	// fetch secret/node name from remediation's annotation if present
 	if annotatedName, exist := far.Annotations["remediation.medik8s.io/node-name"]; exist {
-		nodeSecretName = annotatedName
+		nodeName = annotatedName
 	}
+	nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)
 	nodeSecret, err := r.getParamSecret(ctx, client.ObjectKey{Name: nodeSecretName, Namespace: far.Namespace})
 	if err != nil && !apiErrors.IsNotFound(err) {
 		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
