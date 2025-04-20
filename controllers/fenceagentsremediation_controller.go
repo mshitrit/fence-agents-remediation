@@ -412,22 +412,6 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 		fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 	}
 
-	nodeName := getNodeName(far)
-	// append node parameters
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
-			//Verify action must be reboot
-			if err := validateRebootAction(paramName, nodeVal, logger); err != nil {
-				return nil, err
-			}
-			//Verify param isn't already defined
-			if err := validateUniqueParam(fenceAgentParamNames, paramName, logger); err != nil {
-				return nil, err
-			}
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
-		}
-	}
-
 	// append secret parameters
 	for secretKey, secretVal := range secretParams {
 		secretParam := v1alpha1.ParameterName(secretKey)
@@ -439,6 +423,23 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			return nil, err
 		}
 		fenceAgentParams = appendParamToSlice(fenceAgentParams, secretParam, secretVal)
+	}
+
+	nodeName := getNodeName(far)
+	// append node parameters
+	for paramName, nodeMap := range far.Spec.NodeParameters {
+		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
+			//Verify action must be reboot
+			if err := validateRebootAction(paramName, nodeVal, logger); err != nil {
+				return nil, err
+			}
+			// For node params we don't enforce uniqueness but use other value if defined, TODO explain why ?
+			if _, exist := fenceAgentParamNames[paramName]; !exist {
+				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+				fenceAgentParamNames[paramName] = true
+			}
+
+		}
 	}
 
 	if len(fenceAgentParamNames) == 0 {
