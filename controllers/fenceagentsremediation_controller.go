@@ -406,45 +406,43 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		//Verify action must be reboot
-		if paramName == parameterActionName && paramVal != parameterActionValue {
-			// --action parameter with a differnet value from reboot is not supported
-			err := errors.New("FAR doesn't support any other action than reboot")
-			logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
+		if err := validateRebootAction(paramName, paramVal, logger); err != nil {
 			return nil, err
 		}
 		//Verify param isn't already defined
-		if _, exist := fenceAgentParamNames[paramName]; exist {
-			err := errors.New("invalid multiple definition of FAR shared param")
-			logger.Error(err, "can't build fence agents params shared param is defined multiple times", "shared param name", paramName)
+		if err := validateUniqueParam(fenceAgentParamNames, paramName, logger); err != nil {
 			return nil, err
-		} else { //Not defined, add it
-			fenceAgentParamNames[paramName] = true
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		}
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 	}
 
 	nodeName := getNodeName(far)
 	// append node parameters
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
-			if _, exist := fenceAgentParamNames[paramName]; !exist {
-				fenceAgentParamNames[paramName] = true
-				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+			//Verify action must be reboot
+			if err := validateRebootAction(paramName, nodeVal, logger); err != nil {
+				return nil, err
 			}
-		} else {
-			err := errors.New(errorMissingNodeParams)
-			logger.Error(err, "Missing matching nodeParam and CR's name")
-			return nil, err
+			//Verify param isn't already defined
+			if err := validateUniqueParam(fenceAgentParamNames, paramName, logger); err != nil {
+				return nil, err
+			}
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 		}
 	}
 
 	// append secret parameters
 	for secretKey, secretVal := range secretParams {
 		secretParam := v1alpha1.ParameterName(secretKey)
-		if _, exist := fenceAgentParamNames[secretParam]; !exist {
-			fenceAgentParamNames[secretParam] = true
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, secretParam, secretVal)
+		//Verify action must be reboot
+		if err := validateRebootAction(secretParam, secretVal, logger); err != nil {
+			return nil, err
 		}
+		if err := validateUniqueParam(fenceAgentParamNames, secretParam, logger); err != nil {
+			return nil, err
+		}
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, secretParam, secretVal)
 	}
 
 	if len(fenceAgentParamNames) == 0 {
@@ -459,6 +457,27 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 		fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 	}
 	return fenceAgentParams, nil
+}
+
+func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
+	if paramName == parameterActionName && paramVal != parameterActionValue {
+		// --action parameter with a different value from reboot is not supported
+		err := errors.New("FAR doesn't support any other action than reboot")
+		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
+		return err
+	}
+	return nil
+}
+
+func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]bool, paramName v1alpha1.ParameterName, logger logr.Logger) error {
+	if _, exist := fenceAgentParamNames[paramName]; exist {
+		err := errors.New("invalid multiple definition of FAR shared param")
+		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+		return err
+	} else { //Not defined, add it
+		fenceAgentParamNames[paramName] = true
+		return nil
+	}
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
