@@ -435,10 +435,13 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			}
 			// For node params we don't enforce uniqueness but use other value if defined, TODO explain why ?
 			if _, exist := fenceAgentParamNames[paramName]; !exist {
-				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 				fenceAgentParamNames[paramName] = true
+				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 			}
-
+		} else {
+			err := errors.New(errorMissingNodeParams)
+			logger.Error(err, "Missing matching nodeParam and CR's name")
+			return nil, err
 		}
 	}
 
