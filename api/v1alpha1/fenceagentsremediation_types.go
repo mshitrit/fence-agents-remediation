@@ -99,6 +99,20 @@ type FenceAgentsRemediationSpec struct {
 	// +kubebuilder:validation:Enum=ResourceDeletion;OutOfServiceTaint
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	RemediationStrategy RemediationStrategyType `json:"remediationStrategy,omitempty"`
+
+	// NodeSecretPrefix is the prefix for the name of the Secret (followed by the node name) which will contain params needed for FAR in order to remediate a particular node.
+	// Using this Secret is optional.
+	// +kubebuilder:default:="fence-agents-credentials-node-"
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	//+kubebuilder:validation:Type=string
+	NodeSecretPrefix string `json:"nodeSecretPrefix"`
+
+	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
+	// Using this Secret is optional.
+	// +kubebuilder:default:="fence-agents-credentials-shared"
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	//+kubebuilder:validation:Type=string
+	SharedSecretName string `json:"sharedSecretName"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation

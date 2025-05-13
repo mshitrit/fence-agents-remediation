@@ -35,6 +35,11 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: agent
+      - description: NodeSecretPrefix is the prefix for the name of the Secret (followed
+          by the node name) which will contain params needed for FAR in order to remediate
+          a particular node. Using this Secret is optional.
+        displayName: Node Secret Prefix
+        path: nodeSecretPrefix
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -55,6 +60,11 @@ spec:
       - description: RetryInterval is the interval between each fencing agent execution
         displayName: Retry Interval
         path: retryinterval
+      - description: SharedSecretName is the name of the Secret which will contain
+          params needed for FAR in order to remediate any node. Using this Secret
+          is optional.
+        displayName: Shared Secret Name
+        path: sharedSecretName
       - description: SharedParameters are passed to the fencing agent regardless of
           which node is about to be fenced (i.e., they are common for all the nodes)
         displayName: Shared Parameters
@@ -91,6 +101,11 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
+      - description: NodeSecretPrefix is the prefix for the name of the Secret (followed
+          by the node name) which will contain params needed for FAR in order to remediate
+          a particular node. Using this Secret is optional.
+        displayName: Node Secret Prefix
+        path: template.spec.nodeSecretPrefix
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -111,6 +126,11 @@ spec:
       - description: RetryInterval is the interval between each fencing agent execution
         displayName: Retry Interval
         path: template.spec.retryinterval
+      - description: SharedSecretName is the name of the Secret which will contain
+          params needed for FAR in order to remediate any node. Using this Secret
+          is optional.
+        displayName: Shared Secret Name
+        path: template.spec.sharedSecretName
       - description: SharedParameters are passed to the fencing agent regardless of
           which node is about to be fenced (i.e., they are common for all the nodes)
         displayName: Shared Parameters

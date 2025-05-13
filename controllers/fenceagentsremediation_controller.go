@@ -56,7 +56,6 @@ const (
 	SuccessFAResponse    = "Success: Rebooted"
 	parameterActionName  = "--action"
 	parameterActionValue = "reboot"
-	SharedSecretName     = "fence-agents-credentials-shared"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -338,33 +337,39 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 
 func (r *FenceAgentsRemediationReconciler) collectSecretParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context) (map[string]string, error) {
 	secretParams := map[string]string{}
-	nodeName := getNodeName(far)
-	nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)
-	nodeSecret, err := r.getSecret(ctx, client.ObjectKey{Name: nodeSecretName, Namespace: far.Namespace})
-	if err != nil && !apiErrors.IsNotFound(err) {
-		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
-		return nil, fmt.Errorf(errorFailFetchingSecret, nodeSecretName, far.Namespace, err)
-	}
 
-	sharedSecret, err := r.getSecret(ctx, client.ObjectKey{Name: SharedSecretName, Namespace: far.Namespace})
-	if err != nil && !apiErrors.IsNotFound(err) {
-		r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
-		return nil, fmt.Errorf(errorFailFetchingSecret, SharedSecretName, far.Namespace, err)
-	}
+	sharedSecretName := far.Spec.SharedSecretName
+	if len(sharedSecretName) > 0 {
+		sharedSecret, err := r.getSecret(ctx, client.ObjectKey{Name: sharedSecretName, Namespace: far.Namespace})
+		if err != nil && !apiErrors.IsNotFound(err) {
+			r.Log.Error(err, "failed to fetch secret", "secret name", sharedSecretName, "namespace", far.Namespace)
+			return nil, fmt.Errorf(errorFailFetchingSecret, sharedSecretName, far.Namespace, err)
+		}
 
-	//Fill secret params from shared secret
-	if sharedSecret != nil {
-		for secretKey, secretVal := range sharedSecret.Data {
-			secretParams[secretKey] = string(secretVal)
-			r.Log.Info("found a value from secret", "secret name", SharedSecretName, "parameter name", secretKey)
+		//Fill secret params from shared secret
+		if sharedSecret != nil {
+			for secretKey, secretVal := range sharedSecret.Data {
+				secretParams[secretKey] = string(secretVal)
+				r.Log.Info("found a value from secret", "secret name", sharedSecretName, "parameter name", secretKey)
+			}
 		}
 	}
 
-	//Fill secret params from node secret
-	if nodeSecret != nil {
-		for secretKey, secretVal := range nodeSecret.Data {
-			secretParams[secretKey] = string(secretVal)
-			r.Log.Info("found a value from secret", "secret name", nodeSecretName, "parameter name", secretKey)
+	nodeSecretPrefix := far.Spec.NodeSecretPrefix
+	if len(nodeSecretPrefix) > 0 {
+		nodeSecretName := fmt.Sprintf("%s%s", nodeSecretPrefix, getNodeName(far))
+		nodeSecret, err := r.getSecret(ctx, client.ObjectKey{Name: nodeSecretName, Namespace: far.Namespace})
+		if err != nil && !apiErrors.IsNotFound(err) {
+			r.Log.Error(err, "failed to fetch secret", "secret name", nodeSecretName, "namespace", far.Namespace)
+			return nil, fmt.Errorf(errorFailFetchingSecret, nodeSecretName, far.Namespace, err)
+		}
+
+		//Fill secret params from node secret
+		if nodeSecret != nil {
+			for secretKey, secretVal := range nodeSecret.Data {
+				secretParams[secretKey] = string(secretVal)
+				r.Log.Info("found a value from secret", "secret name", nodeSecretName, "parameter name", secretKey)
+			}
 		}
 	}
 

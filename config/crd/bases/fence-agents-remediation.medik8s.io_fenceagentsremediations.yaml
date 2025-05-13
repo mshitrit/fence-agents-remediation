@@ -48,6 +48,12 @@ spec:
                   It should have a fence_ prefix.
                 pattern: fence_.+
                 type: string
+              nodeSecretPrefix:
+                default: fence-agents-credentials-node-
+                description: |-
+                  NodeSecretPrefix is the prefix for the name of the Secret (followed by the node name) which will contain params needed for FAR in order to remediate a particular node.
+                  Using this Secret is optional.
+                type: string
               nodeparameters:
                 additionalProperties:
                   additionalProperties:
@@ -79,6 +85,12 @@ spec:
                   execution
                 pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
                 type: string
+              sharedSecretName:
+                default: fence-agents-credentials-shared
+                description: |-
+                  SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
+                  Using this Secret is optional.
+                type: string
               sharedparameters:
                 additionalProperties:
                   type: string
@@ -93,6 +105,8 @@ spec:
                 type: string
             required:
             - agent
+            - nodeSecretPrefix
+            - sharedSecretName
             type: object
           status:
             description: FenceAgentsRemediationStatus defines the observed state of
