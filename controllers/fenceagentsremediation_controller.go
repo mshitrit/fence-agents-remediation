@@ -54,7 +54,8 @@ const (
 	errorFailFetchingSecret = "failed to fetch secret `%s` at namespace `%s`: %w"
 
 	SuccessFAResponse    = "Success: Rebooted"
-	parameterActionName  = "--action"
+	parameterActionName  = "--" + actionName
+	actionName           = "action"
 	parameterActionValue = "reboot"
 )
 
@@ -466,7 +467,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 }
 
 func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
-	if paramName == parameterActionName && paramVal != parameterActionValue {
+	if strings.Contains(string(paramName), actionName) && paramVal != parameterActionValue {
 		// --action parameter with a different value from reboot is not supported
 		err := errors.New("FAR doesn't support any other action than reboot")
 		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
@@ -489,9 +490,6 @@ func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]bool, p
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
 func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterName, paramVal string) []string {
 	stringParam := string(paramName)
-	if !strings.HasPrefix(stringParam, "--") {
-		stringParam = "--" + stringParam
-	}
 	if paramVal != "" {
 		fenceAgentParams = append(fenceAgentParams, fmt.Sprintf("%s=%s", stringParam, paramVal))
 	} else {
