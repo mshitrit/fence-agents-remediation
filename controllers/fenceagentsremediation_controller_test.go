@@ -129,20 +129,39 @@ var _ = Describe("FAR Controller", func() {
 					Expect(buildFenceAgentParams(underTestFAR, map[string]string{})).Error().NotTo(HaveOccurred())
 				})
 			})
-			When("FAR CR includes the 'ipport' parameter twice", func() {
-				It("should succeed with ipport `6233`", func() {
+			When("Param defined both in Node and shared params", func() {
+				It("Node param should be used with ipport `6233`", func() {
 					doublePortTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					Expect(buildFenceAgentParams(doublePortTestFAR, map[string]string{})).Error().NotTo(HaveOccurred())
-					// Eventually(func(g Gomega) {
-					// 	g.Expect(storedCommand).To(ConsistOf([]string{
-					// 		"fence_ipmilan",
-					// 		"--lanplus",
-					// 		"--password=password",
-					// 		"--username=admin",
-					// 		"--action=reboot",
-					// 		"--ip=192.168.111.1",
-					// 		"--ipport=600"}))
-					// }, timeoutPreRemediation, pollInterval).Should(Succeed())
+					params, err := buildFenceAgentParams(doublePortTestFAR, map[string]string{})
+					Expect(err).To(BeNil())
+					Expect(params).To(ConsistOf([]string{
+						"--lanplus",
+						"--password=password",
+						"--username=admin",
+						"--action=reboot",
+						"--ip=192.168.111.1",
+						"--ipport=6233"}))
+				})
+
+			})
+
+			When("A param is defined both in Secret and non Secret params", func() {
+				var paramKey = "--mockparam"
+				It("A validation error should occur when Secret param and shared param are duplicate", func() {
+
+					modifiedSharedParams := testShareParam
+					modifiedSharedParams[v1alpha1.ParameterName(paramKey)] = "mockValue"
+					secretParams := map[string]string{paramKey: "mockValue"}
+					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, modifiedSharedParams, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					Expect(buildFenceAgentParams(invalidDuplicateParamFAR, secretParams)).Error().To(Equal(errors.New(errorParamDefinedMultipleTimes)))
+				})
+
+				It("A validation error should occur when Secret param and node param are duplicate", func() {
+					modifiedTestNodeParam := testNodeParam
+					modifiedTestNodeParam[v1alpha1.ParameterName(paramKey)] = map[v1alpha1.NodeName]string{"worker-0": "mockNodeParamValue"}
+					secretParams := map[string]string{paramKey: "mockValue"}
+					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, modifiedTestNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					Expect(buildFenceAgentParams(invalidDuplicateParamFAR, secretParams)).Error().To(Equal(errors.New(errorParamDefinedMultipleTimes)))
 				})
 			})
 		})

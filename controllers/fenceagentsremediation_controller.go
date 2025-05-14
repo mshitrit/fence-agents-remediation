@@ -49,9 +49,10 @@ import (
 
 const (
 	// errors
-	errorMissingParams      = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	errorMissingNodeParams  = "node parameter is required, and cannot be empty"
-	errorFailFetchingSecret = "failed to fetch secret `%s` at namespace `%s`: %w"
+	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
+	errorMissingNodeParams         = "node parameter is required, and cannot be empty"
+	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR  param"
+	errorFailFetchingSecret        = "failed to fetch secret `%s` at namespace `%s`: %w"
 
 	SuccessFAResponse    = "Success: Rebooted"
 	parameterActionName  = "--" + actionName
@@ -441,6 +442,8 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 				return nil, err
 			}
 			// For node params we don't enforce uniqueness but use other value if defined, TODO explain why ?
+			//TODO mshitrit node params should override shared params (no error, maybe log ?)
+			//TODO mshitrit non secret node params can't be duplicate with any secret param
 			if _, exist := fenceAgentParamNames[paramName]; !exist {
 				fenceAgentParamNames[paramName] = true
 				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
@@ -478,7 +481,7 @@ func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, log
 
 func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]bool, paramName v1alpha1.ParameterName, logger logr.Logger) error {
 	if _, exist := fenceAgentParamNames[paramName]; exist {
-		err := errors.New("invalid multiple definition of FAR shared param")
+		err := errors.New(errorParamDefinedMultipleTimes)
 		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
 		return err
 	} else { //Not defined, add it
