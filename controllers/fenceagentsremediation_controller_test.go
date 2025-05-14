@@ -146,21 +146,21 @@ var _ = Describe("FAR Controller", func() {
 			})
 
 			When("A param is defined both in Secret and non Secret params", func() {
-				var paramKey = "--mockparam"
+				var dupParamKey = "--mockparam"
 				It("A validation error should occur when Secret param and shared param are duplicate", func() {
 
-					modifiedSharedParams := testShareParam
-					modifiedSharedParams[v1alpha1.ParameterName(paramKey)] = "mockValue"
-					secretParams := map[string]string{paramKey: "mockValue"}
-					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, modifiedSharedParams, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					testShareParam[v1alpha1.ParameterName(dupParamKey)] = "mockValue"
+					DeferCleanup(func() { delete(testShareParam, v1alpha1.ParameterName(dupParamKey)) })
+					secretParams := map[string]string{dupParamKey: "mockValue"}
+					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 					Expect(buildFenceAgentParams(invalidDuplicateParamFAR, secretParams)).Error().To(Equal(errors.New(errorParamDefinedMultipleTimes)))
 				})
 
 				It("A validation error should occur when Secret param and node param are duplicate", func() {
-					modifiedTestNodeParam := testNodeParam
-					modifiedTestNodeParam[v1alpha1.ParameterName(paramKey)] = map[v1alpha1.NodeName]string{"worker-0": "mockNodeParamValue"}
-					secretParams := map[string]string{paramKey: "mockValue"}
-					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, modifiedTestNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					testNodeParam[v1alpha1.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{"worker-0": "mockNodeParamValue"}
+					DeferCleanup(func() { delete(testNodeParam, v1alpha1.ParameterName(dupParamKey)) })
+					secretParams := map[string]string{dupParamKey: "mockValue"}
+					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 					Expect(buildFenceAgentParams(invalidDuplicateParamFAR, secretParams)).Error().To(Equal(errors.New(errorParamDefinedMultipleTimes)))
 				})
 			})

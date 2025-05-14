@@ -403,9 +403,8 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
-	var fenceAgentParams []string
-	//this map is used to verify there are not parameters which are defined twice
-	fenceAgentParamNames := make(map[v1alpha1.ParameterName]bool)
+
+	fenceAgentParams := make(map[v1alpha1.ParameterName]string)
 
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
@@ -414,23 +413,10 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			return nil, err
 		}
 		//Verify param isn't already defined
-		if err := validateUniqueParam(fenceAgentParamNames, paramName, logger); err != nil {
+		if err := validateUniqueParam(fenceAgentParams, paramName, logger); err != nil {
 			return nil, err
 		}
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
-	}
-
-	// append secret parameters
-	for secretKey, secretVal := range secretParams {
-		secretParam := v1alpha1.ParameterName(secretKey)
-		//Verify action must be reboot
-		if err := validateRebootAction(secretParam, secretVal, logger); err != nil {
-			return nil, err
-		}
-		if err := validateUniqueParam(fenceAgentParamNames, secretParam, logger); err != nil {
-			return nil, err
-		}
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, secretParam, secretVal)
+		fenceAgentParams[paramName] = paramVal
 	}
 
 	nodeName := getNodeName(far)
@@ -442,12 +428,11 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 				return nil, err
 			}
 			// For node params we don't enforce uniqueness but use other value if defined, TODO explain why ?
-			//TODO mshitrit node params should override shared params (no error, maybe log ?)
-			//TODO mshitrit non secret node params can't be duplicate with any secret param
-			if _, exist := fenceAgentParamNames[paramName]; !exist {
-				fenceAgentParamNames[paramName] = true
-				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+			if _, exist := fenceAgentParams[paramName]; exist {
+				logger.Info("Parameter value is override by node parameter", "parameter", paramName)
 			}
+			fenceAgentParams[paramName] = nodeVal
+
 		} else {
 			err := errors.New(errorMissingNodeParams)
 			logger.Error(err, "Missing matching nodeParam and CR's name")
@@ -455,18 +440,37 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 		}
 	}
 
-	if len(fenceAgentParamNames) == 0 {
+	// append secret parameters
+	for secretKey, secretVal := range secretParams {
+		secretParam := v1alpha1.ParameterName(secretKey)
+		//Verify action must be reboot
+		if err := validateRebootAction(secretParam, secretVal, logger); err != nil {
+			return nil, err
+		}
+		if err := validateUniqueParam(fenceAgentParams, secretParam, logger); err != nil {
+			return nil, err
+		}
+		fenceAgentParams[secretParam] = secretVal
+	}
+
+	if len(fenceAgentParams) == 0 {
 		err := errors.New(errorMissingParams)
 		logger.Error(err, "Missing parameters")
 		return nil, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParamNames[parameterActionName]; !exist {
+	if _, exist := fenceAgentParams[parameterActionName]; !exist {
 		logger.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
+		fenceAgentParams[parameterActionName] = parameterActionValue
 	}
-	return fenceAgentParams, nil
+
+	//Convert to slice
+	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
+	for paramName, paramVal := range fenceAgentParams {
+		fenceAgentParamsSlice = appendParamToSlice(fenceAgentParamsSlice, paramName, paramVal)
+	}
+	return fenceAgentParamsSlice, nil
 }
 
 func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
@@ -479,15 +483,13 @@ func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, log
 	return nil
 }
 
-func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]bool, paramName v1alpha1.ParameterName, logger logr.Logger) error {
+func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]string, paramName v1alpha1.ParameterName, logger logr.Logger) error {
 	if _, exist := fenceAgentParamNames[paramName]; exist {
 		err := errors.New(errorParamDefinedMultipleTimes)
 		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
 		return err
-	} else { //Not defined, add it
-		fenceAgentParamNames[paramName] = true
-		return nil
 	}
+	return nil
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
