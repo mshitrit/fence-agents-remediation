@@ -427,7 +427,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			if err := validateRebootAction(paramName, nodeVal, logger); err != nil {
 				return nil, err
 			}
-			// For node params we don't enforce uniqueness but use other value if defined, TODO explain why ?
+			// For node params we don't enforce uniqueness node param value will override shared param
 			if _, exist := fenceAgentParams[paramName]; exist {
 				logger.Info("Parameter value is override by node parameter", "parameter", paramName)
 			}
