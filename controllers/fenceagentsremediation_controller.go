@@ -240,7 +240,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 		faParams, err := buildFenceAgentParams(far, secretParams)
 		if err != nil {
-			r.Log.Error(err, "Invalid secret/shared/node parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
+			r.Log.Error(err, "Invalid node/shared/secret parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
 		}
 
