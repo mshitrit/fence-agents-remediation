@@ -35,11 +35,10 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: agent
-      - description: NodeSecretPrefix is the prefix for the name of the Secret (followed
-          by the node name) which will contain params needed for FAR in order to remediate
-          a particular node. Using this Secret is optional.
-        displayName: Node Secret Prefix
-        path: nodeSecretPrefix
+      - description: NodeSecrets is mapping the node name to the Secret name which
+          contains params relevant for that node.
+        displayName: Node Secrets
+        path: nodeSecrets
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -101,11 +100,10 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
-      - description: NodeSecretPrefix is the prefix for the name of the Secret (followed
-          by the node name) which will contain params needed for FAR in order to remediate
-          a particular node. Using this Secret is optional.
-        displayName: Node Secret Prefix
-        path: template.spec.nodeSecretPrefix
+      - description: NodeSecrets is mapping the node name to the Secret name which
+          contains params relevant for that node.
+        displayName: Node Secrets
+        path: template.spec.nodeSecrets
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters

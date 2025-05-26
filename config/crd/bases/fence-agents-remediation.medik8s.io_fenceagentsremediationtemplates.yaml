@@ -56,12 +56,12 @@ spec:
                           It should have a fence_ prefix.
                         pattern: fence_.+
                         type: string
-                      nodeSecretPrefix:
-                        default: fence-agents-credentials-node-
-                        description: |-
-                          NodeSecretPrefix is the prefix for the name of the Secret (followed by the node name) which will contain params needed for FAR in order to remediate a particular node.
-                          Using this Secret is optional.
-                        type: string
+                      nodeSecrets:
+                        additionalProperties:
+                          type: string
+                        description: NodeSecrets is mapping the node name to the Secret
+                          name which contains params relevant for that node.
+                        type: object
                       nodeparameters:
                         additionalProperties:
                           additionalProperties:
@@ -115,7 +115,6 @@ spec:
                         type: string
                     required:
                     - agent
-                    - nodeSecretPrefix
                     - sharedSecretName
                     type: object
                 required:

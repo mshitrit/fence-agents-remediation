@@ -350,14 +350,21 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(far *v
 		}
 	}
 	// collect secret params from the node's secret
-	if len(far.Spec.NodeSecretPrefix) > 0 {
-		nodeSecretName := fmt.Sprintf("%s%s", far.Spec.NodeSecretPrefix, getNodeName(far))
+	nodeSecretName := r.getNodeSecretName(far)
+	if len(nodeSecretName) > 0 {
 		secretParams, err = r.collectSecretParams(nodeSecretName, far.Namespace, ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return secretParams, nil
+}
+
+func (r *FenceAgentsRemediationReconciler) getNodeSecretName(far *v1alpha1.FenceAgentsRemediation) string {
+	if far.Spec.NodeSecrets == nil {
+		return ""
+	}
+	return far.Spec.NodeSecrets[v1alpha1.NodeName(getNodeName(far))]
 }
 
 // collectSecretParams reads and adds the secret params if they are available, otherwise returns an error

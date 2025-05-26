@@ -100,12 +100,9 @@ type FenceAgentsRemediationSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	RemediationStrategy RemediationStrategyType `json:"remediationStrategy,omitempty"`
 
-	// NodeSecretPrefix is the prefix for the name of the Secret (followed by the node name) which will contain params needed for FAR in order to remediate a particular node.
-	// Using this Secret is optional.
-	// +kubebuilder:default:="fence-agents-credentials-node-"
+	// NodeSecrets is mapping the node name to the Secret name which contains params relevant for that node.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	//+kubebuilder:validation:Type=string
-	NodeSecretPrefix string `json:"nodeSecretPrefix"`
+	NodeSecrets map[NodeName]string `json:"nodeSecrets,omitempty"`
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.
