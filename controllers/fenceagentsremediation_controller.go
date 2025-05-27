@@ -361,10 +361,10 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(far *v
 }
 
 func (r *FenceAgentsRemediationReconciler) getNodeSecretName(far *v1alpha1.FenceAgentsRemediation) string {
-	if far.Spec.NodeSecrets == nil {
+	if far.Spec.NodeSecretNames == nil {
 		return ""
 	}
-	return far.Spec.NodeSecrets[v1alpha1.NodeName(getNodeName(far))]
+	return far.Spec.NodeSecretNames[v1alpha1.NodeName(getNodeName(far))]
 }
 
 // collectSecretParams reads and adds the secret params if they are available, otherwise returns an error

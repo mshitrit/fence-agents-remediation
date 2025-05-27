@@ -114,8 +114,8 @@ func (in *FenceAgentsRemediationSpec) DeepCopyInto(out *FenceAgentsRemediationSp
 			(*out)[key] = outVal
 		}
 	}
-	if in.NodeSecrets != nil {
-		in, out := &in.NodeSecrets, &out.NodeSecrets
+	if in.NodeSecretNames != nil {
+		in, out := &in.NodeSecretNames, &out.NodeSecretNames
 		*out = make(map[NodeName]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
