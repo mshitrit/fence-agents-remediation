@@ -168,6 +168,7 @@ var _ = Describe("FAR Controller", func() {
 	})
 
 	Context("Reconcile with ResourceDeletion strategy", func() {
+		nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", workerNode)
 		farRemediationTaint := utils.CreateRemediationTaint()
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 		underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
@@ -184,7 +185,7 @@ var _ = Describe("FAR Controller", func() {
 			// Create node, and FAR CR, and at the end clean them up with DeferCleanup
 			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), node)
-			credentialSecret = generateSecret(fmt.Sprintf("fence-agents-credentials-node-%s", workerNode))
+			credentialSecret = generateSecret(nodeSecretName)
 			Expect(k8sClient.Create(context.Background(), credentialSecret)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), credentialSecret)
 
@@ -502,6 +503,7 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 			RemediationStrategy: strategy,
 			SharedSecretName:    "fence-agents-credentials-shared",
+			NodeSecretNames:     map[v1alpha1.NodeName]string{v1alpha1.NodeName(nodeName): fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)},
 		},
 	}
 }
