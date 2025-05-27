@@ -501,7 +501,6 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 			RetryInterval:       metav1.Duration{Duration: 5 * time.Second},
 			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 			RemediationStrategy: strategy,
-			NodeSecretPrefix:    "fence-agents-credentials-node-",
 			SharedSecretName:    "fence-agents-credentials-shared",
 		},
 	}

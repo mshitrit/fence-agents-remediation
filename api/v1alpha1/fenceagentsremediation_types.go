@@ -101,15 +101,17 @@ type FenceAgentsRemediationSpec struct {
 	RemediationStrategy RemediationStrategyType `json:"remediationStrategy,omitempty"`
 
 	// NodeSecretNames is mapping the node name to the Secret name which contains params relevant for that node.
+	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeSecretNames map[NodeName]string `json:"nodeSecrets,omitempty"`
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.
 	// +kubebuilder:default:="fence-agents-credentials-shared"
+	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	//+kubebuilder:validation:Type=string
-	SharedSecretName string `json:"sharedSecretName"`
+	SharedSecretName string `json:"sharedSecretName,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation

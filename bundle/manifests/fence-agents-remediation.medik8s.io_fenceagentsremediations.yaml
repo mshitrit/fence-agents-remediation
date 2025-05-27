@@ -107,7 +107,6 @@ spec:
                 type: string
             required:
             - agent
-            - sharedSecretName
             type: object
           status:
             description: FenceAgentsRemediationStatus defines the observed state of
