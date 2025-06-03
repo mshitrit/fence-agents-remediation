@@ -52,7 +52,7 @@ const (
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams         = "node parameter is required, and cannot be empty"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
-	errorFailFetchingSecret        = "failed to fetch secret `%s` at namespace `%s`: %w"
+	errorFailGettingSecret         = "failed to get secret `%s` at namespace `%s`: %w"
 
 	SuccessFAResponse    = "Success: Rebooted"
 	parameterActionName  = "--" + actionName
@@ -102,7 +102,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	emptyResult := ctrl.Result{}
 	requeueImmediately := ctrl.Result{Requeue: true}
 
-	// Fetch the FenceAgentsRemediation instance
+	// Get the FenceAgentsRemediation instance
 	far := &v1alpha1.FenceAgentsRemediation{}
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
@@ -372,8 +372,8 @@ func (r *FenceAgentsRemediationReconciler) collectSecretParams(secretName, names
 	secretParams := make(map[string]string)
 	secret, err := r.getSecret(ctx, client.ObjectKey{Name: secretName, Namespace: namespace})
 	if err != nil && !apiErrors.IsNotFound(err) {
-		r.Log.Error(err, "failed to fetch secret", "secret name", secretName, "namespace", namespace)
-		return nil, fmt.Errorf(errorFailFetchingSecret, secretName, namespace, err)
+		r.Log.Error(err, "failed to get secret", "secret name", secretName, "namespace", namespace)
+		return nil, fmt.Errorf(errorFailGettingSecret, secretName, namespace, err)
 	}
 	// fill secret params from secret
 	if secret != nil {
