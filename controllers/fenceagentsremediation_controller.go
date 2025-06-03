@@ -445,7 +445,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			}
 			// For node params we don't enforce uniqueness node param value will override shared param
 			if _, exist := fenceAgentParams[paramName]; exist {
-				logger.Info("Parameter value is override by node parameter", "parameter", paramName)
+				logger.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
 			}
 			fenceAgentParams[paramName] = nodeVal
 
