@@ -244,8 +244,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			return emptyResult, nil
 		}
 
-		cmd := append([]string{far.Spec.Agent}, faParams...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Node Parameters", maps.Keys(far.Spec.NodeParameters), "Shared Parameters", maps.Keys(far.Spec.SharedParameters))
+		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(faParams)...)
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", maps.Keys(faParams))
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -293,6 +293,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return emptyResult, nil
+}
+
+// mapToSliceConvert convert param value map to slice
+func mapToSliceConvert(fenceAgentParams map[v1alpha1.ParameterName]string) []string {
+	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
+	for paramName, paramVal := range fenceAgentParams {
+		fenceAgentParamsSlice = appendParamToSlice(fenceAgentParamsSlice, paramName, paramVal)
+	}
+	return fenceAgentParamsSlice
 }
 
 // isTimedOutByNHC checks if NHC set a timeout annotation on the CR
@@ -408,7 +417,7 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) ([]string, error) {
+func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) (map[v1alpha1.ParameterName]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 
 	fenceAgentParams := make(map[v1alpha1.ParameterName]string)
@@ -472,12 +481,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 		fenceAgentParams[parameterActionName] = parameterActionValue
 	}
 
-	// Convert to slice
-	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
-	for paramName, paramVal := range fenceAgentParams {
-		fenceAgentParamsSlice = appendParamToSlice(fenceAgentParamsSlice, paramName, paramVal)
-	}
-	return fenceAgentParamsSlice, nil
+	return fenceAgentParams, nil
 }
 
 func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {

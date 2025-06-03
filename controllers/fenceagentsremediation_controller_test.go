@@ -112,7 +112,7 @@ var _ = Describe("FAR Controller", func() {
 					validShareString, err := buildFenceAgentParams(underTestFAR, map[string]string{})
 					Expect(err).NotTo(HaveOccurred())
 					// Eventually buildFenceAgentParams would return the same shareParam
-					Expect(noActionShareString).To(ConsistOf(validShareString))
+					Expect(noActionShareString).To(ConsistOf(mapToSliceConvert(validShareString)))
 				})
 			})
 			When("FAR CR's name doesn't match a node name", func() {
@@ -134,7 +134,7 @@ var _ = Describe("FAR Controller", func() {
 					doublePortTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 					params, err := buildFenceAgentParams(doublePortTestFAR, map[string]string{})
 					Expect(err).To(BeNil())
-					Expect(params).To(ConsistOf([]string{
+					Expect(mapToSliceConvert(params)).To(ConsistOf([]string{
 						"--lanplus",
 						"--password=password",
 						"--username=admin",
