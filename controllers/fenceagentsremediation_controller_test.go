@@ -491,6 +491,7 @@ var _ = Describe("FAR Controller", func() {
 
 // getFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
 func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+	sharedSecretName := "fence-agents-credentials-shared"
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
@@ -502,7 +503,7 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 			RetryInterval:       metav1.Duration{Duration: 5 * time.Second},
 			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 			RemediationStrategy: strategy,
-			SharedSecretName:    "fence-agents-credentials-shared",
+			SharedSecretName:    &sharedSecretName,
 			NodeSecretNames:     map[v1alpha1.NodeName]string{v1alpha1.NodeName(nodeName): fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)},
 		},
 	}

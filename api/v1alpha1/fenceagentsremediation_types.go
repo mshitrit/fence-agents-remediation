@@ -57,37 +57,37 @@ type RemediationStrategyType string
 type FenceAgentsRemediationSpec struct {
 	// Agent is the name of fence agent that will be used.
 	// It should have a fence_ prefix.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	//+kubebuilder:validation:Type=string
-	//+kubebuilder:validation:Pattern=fence_.+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=fence_.+
 	Agent string `json:"agent"`
 
 	// RetryCount is the number of times the fencing agent will be executed
-	//+kubebuilder:default:=5
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// +kubebuilder:default:=5
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	RetryCount int `json:"retrycount,omitempty"`
 
 	// RetryInterval is the interval between each fencing agent execution
-	//+kubebuilder:default:="5s"
-	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
-	//+kubebuilder:validation:Type=string
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// +kubebuilder:default:="5s"
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	// +kubebuilder:validation:Type=string
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	RetryInterval metav1.Duration `json:"retryinterval,omitempty"`
 
 	// Timeout is the timeout for each fencing agent execution
-	//+kubebuilder:default:="60s"
-	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
-	//+kubebuilder:validation:Type=string
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// +kubebuilder:default:="60s"
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	// +kubebuilder:validation:Type=string
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Timeout metav1.Duration `json:"timeout,omitempty"`
 
 	// SharedParameters are passed to the fencing agent regardless of which node is about to be fenced
 	// (i.e., they are common for all the nodes)
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedParameters map[ParameterName]string `json:"sharedparameters,omitempty"`
 
 	// NodeParameters are passed to the fencing agent according to the node that is fenced, since they are node specific
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeParameters map[ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
 
 	// RemediationStrategy is the remediation method for unhealthy nodes.
@@ -102,16 +102,16 @@ type FenceAgentsRemediationSpec struct {
 
 	// NodeSecretNames is mapping the node name to the Secret name which contains params relevant for that node.
 	// +optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeSecretNames map[NodeName]string `json:"nodeSecrets,omitempty"`
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.
 	// +kubebuilder:default:="fence-agents-credentials-shared"
 	// +optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	//+kubebuilder:validation:Type=string
-	SharedSecretName string `json:"sharedSecretName,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// +kubebuilder:validation:Type=string
+	SharedSecretName *string `json:"sharedSecretName,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation
@@ -123,22 +123,22 @@ type FenceAgentsRemediationStatus struct {
 	// Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded", and "Succeeded".
 	// +listType=map
 	// +listMapKey=type
-	//+optional
+	// +optional
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="conditions",xDescriptors="urn:alm:descriptor:io.kubernetes.conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// LastUpdateTime is the last time the status was updated.
 	//
-	//+optional
-	//+kubebuilder:validation:Type=string
-	//+kubebuilder:validation:Format=date-time
-	//+operator-sdk:csv:customresourcedefinitions:type=status
+	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	// +operator-sdk:csv:customresourcedefinitions:type=status
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:resource:shortName=far
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=far
 
 // +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 // FenceAgentsRemediation is the Schema for the fenceagentsremediations API

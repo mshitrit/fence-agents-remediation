@@ -343,8 +343,8 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(far *v
 	var err error
 
 	// collect secret params from shared secret
-	if len(far.Spec.SharedSecretName) > 0 {
-		secretParams, err = r.collectSecretParams(far.Spec.SharedSecretName, far.Namespace, ctx)
+	if far.Spec.SharedSecretName != nil {
+		secretParams, err = r.collectSecretParams(*far.Spec.SharedSecretName, far.Namespace, ctx)
 		if err != nil {
 			return nil, err
 		}
