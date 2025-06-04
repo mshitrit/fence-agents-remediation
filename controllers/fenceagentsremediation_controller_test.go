@@ -61,9 +61,9 @@ var (
 
 var _ = Describe("FAR Controller", func() {
 	var (
-		node             *corev1.Node
-		underTestFAR     = &v1alpha1.FenceAgentsRemediation{}
-		credentialSecret = &corev1.Secret{}
+		node                     *corev1.Node
+		underTestFAR             = &v1alpha1.FenceAgentsRemediation{}
+		nodeSecret, sharedSecret = &corev1.Secret{}, &corev1.Secret{}
 	)
 
 	noActionShareParam := map[v1alpha1.ParameterName]string{
@@ -161,6 +161,7 @@ var _ = Describe("FAR Controller", func() {
 
 	Context("Reconcile with ResourceDeletion strategy", func() {
 		nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", workerNode)
+		sharedSecretName := "fence-agents-credentials-shared"
 		farRemediationTaint := utils.CreateRemediationTaint()
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 		underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
@@ -171,15 +172,24 @@ var _ = Describe("FAR Controller", func() {
 
 			farPod := createRunningPod("far-manager-test", farPodName, "")
 			DeferCleanup(k8sClient.Delete, context.Background(), farPod)
+
+			nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
+				"--pass":  []byte("abc"),
+				"--pass2": []byte("abc2"),
+			})
+			sharedSecret = generateSecret(sharedSecretName, map[string][]byte{})
 		})
 
 		JustBeforeEach(func() {
 			// Create node, and FAR CR, and at the end clean them up with DeferCleanup
 			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), node)
-			credentialSecret = generateSecret(nodeSecretName)
-			Expect(k8sClient.Create(context.Background(), credentialSecret)).To(Succeed())
-			DeferCleanup(k8sClient.Delete, context.Background(), credentialSecret)
+
+			Expect(k8sClient.Create(context.Background(), nodeSecret)).To(Succeed())
+			DeferCleanup(k8sClient.Delete, context.Background(), nodeSecret)
+
+			Expect(k8sClient.Create(context.Background(), sharedSecret)).To(Succeed())
+			DeferCleanup(k8sClient.Delete, context.Background(), sharedSecret)
 
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
 			DeferCleanup(func() {
@@ -194,7 +204,36 @@ var _ = Describe("FAR Controller", func() {
 			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
 			time.Sleep(1 * time.Second)
 		})
+		When("A param is defined both in shared Secret and in node Secret", func() {
+			BeforeEach(func() {
+				sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
+					"--mock-secure-param-a": []byte("mock-top-secret-shared-value"),
+					"--mock-secure-param-b": []byte("mock-top-secret-value-b"),
+				})
+				nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
+					"--mock-secure-param-a": []byte("mock-top-secret-node-value"),
+					"--mock-secure-param-c": []byte("mock-top-secret-value-c"),
+				})
+				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 
+			})
+			It("Node Secret param should override shared Secret param", func() {
+				Eventually(func(g Gomega) {
+					g.Expect(storedCommand).To(ConsistOf([]string{
+						"fence_ipmilan",
+						"--lanplus",
+						"--password=password",
+						"--username=admin",
+						"--action=reboot",
+						"--ip=192.168.111.1",
+						"--mock-secure-param-a=mock-top-secret-node-value",
+						"--mock-secure-param-b=mock-top-secret-value-b",
+						"--mock-secure-param-c=mock-top-secret-value-c",
+						"--ipport=6233"}))
+				}, timeoutPreRemediation, pollInterval).Should(Succeed())
+			})
+		})
 		When("creating valid FAR CR", func() {
 
 			testSuccessfulRemediation := func() {
@@ -502,14 +541,11 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 }
 
 // generateSecret assigns the input to the FenceAgentsRemediation
-func generateSecret(nodeName string) *corev1.Secret {
+func generateSecret(secretName string, secretData map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
-		Data: map[string][]byte{
-			"--pass":  []byte("abc"),
-			"--pass2": []byte("abc2"),
-		},
-		Type: corev1.SecretType("Opaque"),
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: defaultNamespace},
+		Data:       secretData,
+		Type:       corev1.SecretType("Opaque"),
 	}
 }
 
