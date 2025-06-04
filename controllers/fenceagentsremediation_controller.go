@@ -358,10 +358,15 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(far *v
 	}
 	// collect secret params from the node's secret
 	nodeSecretName := r.getNodeSecretName(far)
+	var nodeSecretParams map[string]string
 	if len(nodeSecretName) > 0 {
-		secretParams, err = r.collectSecretParams(nodeSecretName, far.Namespace, ctx)
+		nodeSecretParams, err = r.collectSecretParams(nodeSecretName, far.Namespace, ctx)
 		if err != nil {
 			return nil, err
+		}
+		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
+		for paramName, nodeParamValue := range nodeSecretParams {
+			secretParams[paramName] = nodeParamValue
 		}
 	}
 	return secretParams, nil
