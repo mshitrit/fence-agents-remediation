@@ -107,10 +107,10 @@ type FenceAgentsRemediationSpec struct {
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.
-	// +kubebuilder:default:="fence-agents-credentials-shared"
 	// +optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// +kubebuilder:default:="fence-agents-credentials-shared"
 	// +kubebuilder:validation:Type=string
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedSecretName *string `json:"sharedSecretName,omitempty"`
 }
 
