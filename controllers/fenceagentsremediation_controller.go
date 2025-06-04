@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -485,7 +484,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 }
 
 func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
-	if strings.Contains(string(paramName), actionName) && paramVal != parameterActionValue {
+	if (paramName == actionName || paramName == parameterActionName) && paramVal != parameterActionValue {
 		// --action parameter with a different value from reboot is not supported
 		err := errors.New("FAR doesn't support any other action than reboot")
 		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
