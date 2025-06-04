@@ -49,7 +49,6 @@ import (
 const (
 	// errors
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	errorMissingNodeParams         = "node parameter is required, and cannot be empty"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
 	errorFailGettingSecret         = "failed to get secret `%s` at namespace `%s`: %w"
 
@@ -449,9 +448,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 			fenceAgentParams[paramName] = nodeVal
 
 		} else {
-			err := errors.New(errorMissingNodeParams)
-			logger.Error(err, "Missing matching nodeParam and CR's name")
-			return nil, err
+			logger.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
 		}
 	}
 

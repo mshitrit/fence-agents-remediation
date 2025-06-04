@@ -115,14 +115,6 @@ var _ = Describe("FAR Controller", func() {
 					Expect(noActionShareString).To(ConsistOf(mapToSliceConvert(validShareString)))
 				})
 			})
-			When("FAR CR's name doesn't match a node name", func() {
-				It("should fail", func() {
-					underTestFAR.ObjectMeta.Name = dummyNode
-					_, err := buildFenceAgentParams(underTestFAR, map[string]string{})
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(Equal(errors.New(errorMissingNodeParams)))
-				})
-			})
 			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = workerNode
