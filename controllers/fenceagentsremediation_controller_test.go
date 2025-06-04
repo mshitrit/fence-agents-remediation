@@ -112,7 +112,7 @@ var _ = Describe("FAR Controller", func() {
 					validShareString, err := buildFenceAgentParams(underTestFAR, map[string]string{})
 					Expect(err).NotTo(HaveOccurred())
 					// Eventually buildFenceAgentParams would return the same shareParam
-					Expect(noActionShareString).To(ConsistOf(mapToSliceConvert(validShareString)))
+					Expect(noActionShareString).To(Equal(validShareString))
 				})
 			})
 			When("FAR CR's name does match a node name", func() {
