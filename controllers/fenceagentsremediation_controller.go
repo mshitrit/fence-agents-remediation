@@ -231,12 +231,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		secretParams, err := r.collectRemediationSecretParams(far, ctx)
-		if err != nil {
-			r.Log.Error(err, "Failed collecting secrets data", "Node Name", node.Name, "CR Name", req.Name)
-			return emptyResult, err
-		}
-		faParams, err := buildFenceAgentParams(far, secretParams)
+		faParams, err := r.buildFenceAgentParams(far, ctx)
 		if err != nil {
 			r.Log.Error(err, "Invalid node/shared/secret parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
@@ -420,8 +415,14 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) (map[v1alpha1.ParameterName]string, error) {
+func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context) (map[v1alpha1.ParameterName]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
+	nodeName := getNodeName(far)
+	secretParams, err := r.collectRemediationSecretParams(far, ctx)
+	if err != nil {
+		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
+		return nil, err
+	}
 
 	fenceAgentParams := make(map[v1alpha1.ParameterName]string)
 
@@ -438,7 +439,6 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams ma
 		fenceAgentParams[paramName] = paramVal
 	}
 
-	nodeName := getNodeName(far)
 	// append node parameters
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
