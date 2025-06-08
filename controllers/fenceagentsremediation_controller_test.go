@@ -97,67 +97,6 @@ var _ = Describe("FAR Controller", func() {
 			"worker-2": "6235",
 		},
 	}
-	Context("Functionality", func() {
-		BeforeEach(func() {
-			plogs.Clear()
-			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-		})
-		Context("buildFenceAgentParams", func() {
-			When("FAR CR misses the action parameter", func() {
-				It("should succeed and add the action parameter with value reboot", func() {
-					testFARNoAction := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, noActionShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					noActionShareString, err := buildFenceAgentParams(testFARNoAction, map[string]string{})
-					Expect(err).NotTo(HaveOccurred())
-					underTestFAR.ObjectMeta.Name = workerNode
-					validShareString, err := buildFenceAgentParams(underTestFAR, map[string]string{})
-					Expect(err).NotTo(HaveOccurred())
-					// Eventually buildFenceAgentParams would return the same shareParam
-					Expect(noActionShareString).To(Equal(validShareString))
-				})
-			})
-			When("FAR CR's name does match a node name", func() {
-				It("should succeed", func() {
-					underTestFAR.ObjectMeta.Name = workerNode
-					Expect(buildFenceAgentParams(underTestFAR, map[string]string{})).Error().NotTo(HaveOccurred())
-				})
-			})
-			When("Param defined both in Node and shared params", func() {
-				It("Node param should be used with ipport `6233`", func() {
-					doublePortTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					params, err := buildFenceAgentParams(doublePortTestFAR, map[string]string{})
-					Expect(err).To(BeNil())
-					Expect(mapToSliceConvert(params)).To(ConsistOf([]string{
-						"--lanplus",
-						"--password=password",
-						"--username=admin",
-						"--action=reboot",
-						"--ip=192.168.111.1",
-						"--ipport=6233"}))
-				})
-
-			})
-
-			When("A param is defined both in Secret and non Secret params", func() {
-				var dupParamKey = "--mockparam"
-				It("A validation error should occur when Secret param and shared param are duplicate", func() {
-
-					testShareParam[v1alpha1.ParameterName(dupParamKey)] = "mockValue"
-					DeferCleanup(func() { delete(testShareParam, v1alpha1.ParameterName(dupParamKey)) })
-					secretParams := map[string]string{dupParamKey: "mockValue"}
-					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					Expect(buildFenceAgentParams(invalidDuplicateParamFAR, secretParams)).Error().To(Equal(errors.New(errorParamDefinedMultipleTimes)))
-				})
-
-				It("A validation error should occur when Secret param and node param are duplicate", func() {
-					testNodeParam[v1alpha1.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{"worker-0": "mockNodeParamValue"}
-					DeferCleanup(func() { delete(testNodeParam, v1alpha1.ParameterName(dupParamKey)) })
-					secretParams := map[string]string{dupParamKey: "mockValue"}
-					invalidDuplicateParamFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					Expect(buildFenceAgentParams(invalidDuplicateParamFAR, secretParams)).Error().To(Equal(errors.New(errorParamDefinedMultipleTimes)))
-				})
-			})
-		})
-	})
 
 	Context("Reconcile with ResourceDeletion strategy", func() {
 		nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", workerNode)
@@ -204,34 +143,175 @@ var _ = Describe("FAR Controller", func() {
 			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
 			time.Sleep(1 * time.Second)
 		})
-		When("A param is defined both in shared Secret and in node Secret", func() {
+		Context("Verify correct params", func() {
 			BeforeEach(func() {
-				sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
-					"--mock-secure-param-a": []byte("mock-top-secret-shared-value"),
-					"--mock-secure-param-b": []byte("mock-top-secret-value-b"),
-				})
-				nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
-					"--mock-secure-param-a": []byte("mock-top-secret-node-value"),
-					"--mock-secure-param-c": []byte("mock-top-secret-value-c"),
-				})
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-
 			})
-			It("Node Secret param should override shared Secret param", func() {
-				Eventually(func(g Gomega) {
-					g.Expect(storedCommand).To(ConsistOf([]string{
-						"fence_ipmilan",
-						"--lanplus",
-						"--password=password",
-						"--username=admin",
-						"--action=reboot",
-						"--ip=192.168.111.1",
-						"--mock-secure-param-a=mock-top-secret-node-value",
-						"--mock-secure-param-b=mock-top-secret-value-b",
-						"--mock-secure-param-c=mock-top-secret-value-c",
-						"--ipport=6233"}))
-				}, timeoutPreRemediation, pollInterval).Should(Succeed())
+			When("A param is defined both in shared Secret and in node Secret", func() {
+				BeforeEach(func() {
+					sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
+						"--mock-secure-param-a": []byte("mock-top-secret-shared-value"),
+						"--mock-secure-param-b": []byte("mock-top-secret-value-b"),
+					})
+					nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
+						"--mock-secure-param-a": []byte("mock-top-secret-node-value"),
+						"--mock-secure-param-c": []byte("mock-top-secret-value-c"),
+					})
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+
+				})
+				It("Node Secret param should override shared Secret param", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(storedCommand).To(ConsistOf([]string{
+							"fence_ipmilan",
+							"--lanplus",
+							"--password=password",
+							"--username=admin",
+							"--action=reboot",
+							"--ip=192.168.111.1",
+							"--mock-secure-param-a=mock-top-secret-node-value",
+							"--mock-secure-param-b=mock-top-secret-value-b",
+							"--mock-secure-param-c=mock-top-secret-value-c",
+							"--ipport=6233"}))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+			When("A param is defined both as secure (Secret) and non-secure", func() {
+				When("A param is defined both in sharedSecret and in shared params", func() {
+					BeforeEach(func() {
+						dupParamKey := "--mockparam"
+						testShareParam[v1alpha1.ParameterName(dupParamKey)] = "mockValue"
+						DeferCleanup(func() { delete(testShareParam, v1alpha1.ParameterName(dupParamKey)) })
+
+						sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
+							dupParamKey: []byte("mockValue"),
+						})
+
+						underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					})
+					It("A validation error would prevent execution of fence agent command", func() {
+						// No remediation should be executed due to an error
+						Consistently(func(g Gomega) {
+							g.Expect(storedCommand).To(BeEmpty())
+						}, timeoutPreRemediation, pollInterval).Should(Succeed())
+						// Taint is added before execution of fence agent takes place
+						verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
+						// Actual execution does not happen because of the validation error
+						verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
+
+					})
+				})
+				When("A param is defined both in sharedSecret and in node params", func() {
+					BeforeEach(func() {
+						dupParamKey := "--mockparam"
+						testNodeParam[v1alpha1.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
+						DeferCleanup(func() { delete(testNodeParam, v1alpha1.ParameterName(dupParamKey)) })
+
+						sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
+							dupParamKey: []byte("mockValue"),
+						})
+						underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					})
+					It("A validation error would prevent execution of fence agent command", func() {
+						// No remediation should be executed due to an error
+						Consistently(func(g Gomega) {
+							g.Expect(storedCommand).To(BeEmpty())
+						}, timeoutPreRemediation, pollInterval).Should(Succeed())
+						// Taint is added before execution of fence agent takes place
+						verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
+						// Actual execution does not happen because of the validation error
+						verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
+
+					})
+				})
+				When("A param is defined both in node Secret and in shared params", func() {
+					BeforeEach(func() {
+						dupParamKey := "--mockparam"
+						testShareParam[v1alpha1.ParameterName(dupParamKey)] = "mockValue"
+						DeferCleanup(func() { delete(testShareParam, v1alpha1.ParameterName(dupParamKey)) })
+
+						nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
+							dupParamKey: []byte("mockValue"),
+						})
+
+						underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					})
+					It("A validation error would prevent execution of fence agent command", func() {
+						// No remediation should be executed due to an error
+						Consistently(func(g Gomega) {
+							g.Expect(storedCommand).To(BeEmpty())
+						}, timeoutPreRemediation, pollInterval).Should(Succeed())
+						// Taint is added before execution of fence agent takes place
+						verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
+						// Actual execution does not happen because of the validation error
+						verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
+
+					})
+				})
+				When("A param is defined both in node Secret and in node params", func() {
+					BeforeEach(func() {
+						dupParamKey := "--mockparam"
+						testNodeParam[v1alpha1.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
+						DeferCleanup(func() { delete(testNodeParam, v1alpha1.ParameterName(dupParamKey)) })
+
+						nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
+							dupParamKey: []byte("mockValue"),
+						})
+
+						underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+					})
+					It("A validation error would prevent execution of fence agent command", func() {
+						// No remediation should be executed due to an error
+						Consistently(func(g Gomega) {
+							g.Expect(storedCommand).To(BeEmpty())
+						}, timeoutPreRemediation, pollInterval).Should(Succeed())
+						// Taint is added before execution of fence agent takes place
+						verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
+						// Actual execution does not happen because of the validation error
+						verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
+
+					})
+				})
+			})
+			When("FAR CR misses the action parameter", func() {
+				BeforeEach(func() {
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, noActionShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				})
+				It("should succeed and add the action parameter with value reboot", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(storedCommand).To(ConsistOf([]string{
+							"fence_ipmilan",
+							"--lanplus",
+							"--password=password",
+							"--username=admin",
+							"--action=reboot",
+							"--ip=192.168.111.1",
+							"--pass2=abc2",
+							"--pass=abc",
+							"--ipport=6233"}))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+			When("Param defined both in Node and shared params", func() {
+				BeforeEach(func() {
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+
+				})
+				It("Node param should be used with ipport `6233`", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(storedCommand).To(ConsistOf([]string{
+							"fence_ipmilan",
+							"--lanplus",
+							"--password=password",
+							"--username=admin",
+							"--action=reboot",
+							"--ip=192.168.111.1",
+							"--pass2=abc2",
+							"--pass=abc",
+							"--ipport=6233"}))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+
 			})
 		})
 		When("creating valid FAR CR", func() {
