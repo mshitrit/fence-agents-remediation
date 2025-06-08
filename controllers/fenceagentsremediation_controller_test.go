@@ -97,6 +97,9 @@ var _ = Describe("FAR Controller", func() {
 			"worker-2": "6235",
 		},
 	}
+	BeforeEach(func() {
+		storedCommand = storedCommand[:0]
+	})
 
 	Context("Reconcile with ResourceDeletion strategy", func() {
 		nodeSecretName := fmt.Sprintf("fence-agents-credentials-node-%s", workerNode)
