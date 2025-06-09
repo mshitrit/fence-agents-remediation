@@ -411,6 +411,14 @@ spec:
           verbs:
           - create
           - patch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: fence-agents-remediation-controller-manager
     strategy: deployment
   installModes:
