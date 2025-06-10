@@ -231,7 +231,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, err := r.buildFenceAgentParams(far, ctx)
+		faParams, err := r.buildFenceAgentParams(ctx, far)
 		if err != nil {
 			r.Log.Error(err, "Invalid node/shared/secret parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
@@ -340,13 +340,13 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 }
 
 // collectRemediationSecretParams collects the parameters from the shared secret and the node secret
-func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context) (map[string]string, error) {
+func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[string]string, error) {
 	secretParams := map[string]string{}
 	var err error
 
 	// collect secret params from shared secret
 	if far.Spec.SharedSecretName != nil {
-		secretParams, err = r.collectSecretParams(*far.Spec.SharedSecretName, far.Namespace, ctx)
+		secretParams, err = r.collectSecretParams(ctx, *far.Spec.SharedSecretName, far.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +355,7 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(far *v
 	nodeSecretName := r.getNodeSecretName(far)
 	var nodeSecretParams map[string]string
 	if len(nodeSecretName) > 0 {
-		nodeSecretParams, err = r.collectSecretParams(nodeSecretName, far.Namespace, ctx)
+		nodeSecretParams, err = r.collectSecretParams(ctx, nodeSecretName, far.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -375,7 +375,7 @@ func (r *FenceAgentsRemediationReconciler) getNodeSecretName(far *v1alpha1.Fence
 }
 
 // collectSecretParams reads and adds the secret params if they are available, otherwise returns an error
-func (r *FenceAgentsRemediationReconciler) collectSecretParams(secretName, namespace string, ctx context.Context) (map[string]string, error) {
+func (r *FenceAgentsRemediationReconciler) collectSecretParams(ctx context.Context, secretName, namespace string) (map[string]string, error) {
 	secretParams := make(map[string]string)
 	secret, err := r.getSecret(ctx, client.ObjectKey{Name: secretName, Namespace: namespace})
 	if err != nil && !apiErrors.IsNotFound(err) {
@@ -415,10 +415,10 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context) (map[v1alpha1.ParameterName]string, error) {
+func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	nodeName := getNodeName(far)
-	secretParams, err := r.collectRemediationSecretParams(far, ctx)
+	secretParams, err := r.collectRemediationSecretParams(ctx, far)
 	if err != nil {
 		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
 		return nil, err
