@@ -80,8 +80,8 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: agent
-      - description: NodeSecretNames is mapping the node name to the Secret name which
-          contains params relevant for that node.
+      - description: NodeSecretNames maps the node name to the Secret name which contains
+          params relevant for that node.
         displayName: Node Secret Names
         path: nodeSecrets
       - description: NodeParameters are passed to the fencing agent according to the
@@ -145,8 +145,8 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
-      - description: NodeSecretNames is mapping the node name to the Secret name which
-          contains params relevant for that node.
+      - description: NodeSecretNames maps the node name to the Secret name which contains
+          params relevant for that node.
         displayName: Node Secret Names
         path: template.spec.nodeSecrets
       - description: NodeParameters are passed to the fencing agent according to the

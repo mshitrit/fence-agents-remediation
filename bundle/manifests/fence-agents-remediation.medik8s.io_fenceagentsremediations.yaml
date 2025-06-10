@@ -53,8 +53,8 @@ spec:
               nodeSecrets:
                 additionalProperties:
                   type: string
-                description: NodeSecretNames is mapping the node name to the Secret
-                  name which contains params relevant for that node.
+                description: NodeSecretNames maps the node name to the Secret name
+                  which contains params relevant for that node.
                 type: object
               nodeparameters:
                 additionalProperties:

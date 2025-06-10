@@ -100,7 +100,7 @@ type FenceAgentsRemediationSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	RemediationStrategy RemediationStrategyType `json:"remediationStrategy,omitempty"`
 
-	// NodeSecretNames is mapping the node name to the Secret name which contains params relevant for that node.
+	// NodeSecretNames maps the node name to the Secret name which contains params relevant for that node.
 	// +optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeSecretNames map[NodeName]string `json:"nodeSecrets,omitempty"`
