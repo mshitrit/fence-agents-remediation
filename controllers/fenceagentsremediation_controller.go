@@ -288,7 +288,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	return emptyResult, nil
 }
 
-// mapToSliceConvert convert param value map to slice
+// mapToSliceConvert converts param value map to slice
 func mapToSliceConvert(fenceAgentParams map[v1alpha1.ParameterName]string) []string {
 	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
 	for paramName, paramVal := range fenceAgentParams {
