@@ -233,7 +233,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
 		faParams, err := r.buildFenceAgentParams(ctx, far)
 		if err != nil {
-			r.Log.Error(err, "Invalid node/shared/secret parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
+			r.Log.Error(err, "Invalid parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
 		}
 
