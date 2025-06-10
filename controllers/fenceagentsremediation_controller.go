@@ -377,8 +377,7 @@ func (r *FenceAgentsRemediationReconciler) getNodeSecretName(far *v1alpha1.Fence
 func (r *FenceAgentsRemediationReconciler) collectSecretParams(ctx context.Context, secretName, namespace string) (map[string]string, error) {
 	secretParams := make(map[string]string)
 	secret, err := r.getSecret(ctx, client.ObjectKey{Name: secretName, Namespace: namespace})
-	if err != nil && !apiErrors.IsNotFound(err) {
-		r.Log.Error(err, "failed to get secret", "secret name", secretName, "namespace", namespace)
+	if err != nil {
 		return nil, fmt.Errorf(errorFailGettingSecret, secretName, namespace, err)
 	}
 	// fill secret params from secret
@@ -406,8 +405,11 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 // getSecret gets a secret returns an error on failure
 func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, secretKeyObj, secret); err != nil {
+	if err := r.Get(ctx, secretKeyObj, secret); err != nil && !apiErrors.IsNotFound(err) {
+		r.Log.Error(err, "failed to get secret", "secret name", secretKeyObj.Name, "namespace", secretKeyObj.Namespace)
 		return nil, err
+	} else if apiErrors.IsNotFound(err) {
+		return nil, nil
 	}
 	return secret, nil
 }
