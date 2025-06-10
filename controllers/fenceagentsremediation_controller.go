@@ -417,7 +417,6 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, error) {
-	logger := ctrl.Log.WithName("build-fa-parameters")
 	nodeName := getNodeName(far)
 	secretParams, err := r.collectRemediationSecretParams(ctx, far)
 	if err != nil {
@@ -430,11 +429,11 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		// Verify action must be reboot
-		if err := validateRebootAction(paramName, paramVal, logger); err != nil {
+		if err := validateRebootAction(paramName, paramVal, r.Log); err != nil {
 			return nil, err
 		}
 		// Verify param isn't already defined
-		if err := validateUniqueParam(fenceAgentParams, paramName, logger); err != nil {
+		if err := validateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
 			return nil, err
 		}
 		fenceAgentParams[paramName] = paramVal
@@ -444,17 +443,17 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
 			// Verify action must be reboot
-			if err := validateRebootAction(paramName, nodeVal, logger); err != nil {
+			if err := validateRebootAction(paramName, nodeVal, r.Log); err != nil {
 				return nil, err
 			}
 			// For node params we don't enforce uniqueness node param value will override shared param
 			if _, exist := fenceAgentParams[paramName]; exist {
-				logger.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
+				r.Log.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
 			}
 			fenceAgentParams[paramName] = nodeVal
 
 		} else {
-			logger.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
+			r.Log.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
 		}
 	}
 
@@ -462,10 +461,10 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	for secretKey, secretVal := range secretParams {
 		secretParam := v1alpha1.ParameterName(secretKey)
 		// Verify action must be reboot
-		if err := validateRebootAction(secretParam, secretVal, logger); err != nil {
+		if err := validateRebootAction(secretParam, secretVal, r.Log); err != nil {
 			return nil, err
 		}
-		if err := validateUniqueParam(fenceAgentParams, secretParam, logger); err != nil {
+		if err := validateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
 			return nil, err
 		}
 		fenceAgentParams[secretParam] = secretVal
@@ -473,13 +472,13 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 
 	if len(fenceAgentParams) == 0 {
 		err := errors.New(errorMissingParams)
-		logger.Error(err, "Missing parameters")
+		r.Log.Error(err, "Missing parameters")
 		return nil, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
 	if _, exist := fenceAgentParams[parameterActionName]; !exist {
-		logger.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
+		r.Log.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
 		fenceAgentParams[parameterActionName] = parameterActionValue
 	}
 
