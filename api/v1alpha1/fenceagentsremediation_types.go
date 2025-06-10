@@ -81,8 +81,7 @@ type FenceAgentsRemediationSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Timeout metav1.Duration `json:"timeout,omitempty"`
 
-	// SharedParameters are passed to the fencing agent regardless of which node is about to be fenced
-	// (i.e., they are common for all the nodes)
+	// SharedParameters are parameters common to all nodes
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedParameters map[ParameterName]string `json:"sharedparameters,omitempty"`
 

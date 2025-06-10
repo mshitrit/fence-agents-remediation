@@ -94,9 +94,7 @@ spec:
               sharedparameters:
                 additionalProperties:
                   type: string
-                description: |-
-                  SharedParameters are passed to the fencing agent regardless of which node is about to be fenced
-                  (i.e., they are common for all the nodes)
+                description: SharedParameters are parameters common to all nodes
                 type: object
               timeout:
                 default: 60s

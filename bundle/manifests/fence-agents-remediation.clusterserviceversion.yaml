@@ -109,8 +109,7 @@ spec:
           is optional.
         displayName: Shared Secret Name
         path: sharedSecretName
-      - description: SharedParameters are passed to the fencing agent regardless of
-          which node is about to be fenced (i.e., they are common for all the nodes)
+      - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: sharedparameters
       - description: Timeout is the timeout for each fencing agent execution
@@ -174,8 +173,7 @@ spec:
           is optional.
         displayName: Shared Secret Name
         path: template.spec.sharedSecretName
-      - description: SharedParameters are passed to the fencing agent regardless of
-          which node is about to be fenced (i.e., they are common for all the nodes)
+      - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: template.spec.sharedparameters
       - description: Timeout is the timeout for each fencing agent execution
