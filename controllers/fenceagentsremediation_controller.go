@@ -360,9 +360,7 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 			return nil, err
 		}
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
-		for paramName, nodeParamValue := range nodeSecretParams {
-			secretParams[paramName] = nodeParamValue
-		}
+		maps.Copy(secretParams, nodeSecretParams)
 	}
 	return secretParams, nil
 }
