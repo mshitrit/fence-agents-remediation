@@ -233,19 +233,6 @@ spec:
 
 ```
 
-Here is an example for a Secret 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-name: fence-agents-credentials-worker0
-namespace: openshift-workload-availability
-type: Opaque
-data:
-  --password: eXl5eQ== # "yyyy" base64 encoded
-
-```
-
 #### Secret Support:
 
 * You can define:
@@ -257,6 +244,19 @@ data:
 * If a parameter exists in both a shared and a node Secret, the **node Secret value takes precedence**.
 
 If a parameter is defined in both a Secret and in the `sharedparameters` or `nodeparameters` fields of the CR, a **validation error will occur** to prevent ambiguity.
+
+Here is an example for a Secret
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+name: fence-agents-credentials-worker0
+namespace: openshift-workload-availability
+type: Opaque
+data:
+  --password: eXl5eQ== # "yyyy" base64 encoded
+
+```
 
 ## Tests
 
