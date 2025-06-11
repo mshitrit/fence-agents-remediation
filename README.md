@@ -233,6 +233,19 @@ spec:
 
 ```
 
+Here is an example for a Secret 
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+name: fence-agents-credentials-worker0
+namespace: openshift-workload-availability
+type: Opaque
+data:
+  --password: eXl5eQ== # "yyyy" base64 encoded
+
+```
+
 #### Secret Support:
 
 * You can define:
