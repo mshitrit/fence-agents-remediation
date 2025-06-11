@@ -352,7 +352,7 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 		}
 	}
 	// collect secret params from the node's secret
-	nodeSecretName, isFound := r.getNodeSecretName(far)
+	nodeSecretName, isFound := far.Spec.NodeSecretNames[v1alpha1.NodeName(getNodeName(far))]
 	var nodeSecretParams map[string]string
 	if isFound {
 		nodeSecretParams, err = r.collectSecretParams(ctx, nodeSecretName, far.Namespace)
@@ -363,14 +363,6 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 		maps.Copy(secretParams, nodeSecretParams)
 	}
 	return secretParams, nil
-}
-
-func (r *FenceAgentsRemediationReconciler) getNodeSecretName(far *v1alpha1.FenceAgentsRemediation) (string, bool) {
-	if far.Spec.NodeSecretNames == nil {
-		return "", false
-	}
-	secretName, isFound := far.Spec.NodeSecretNames[v1alpha1.NodeName(getNodeName(far))]
-	return secretName, isFound
 }
 
 // collectSecretParams reads and adds the secret params if they are available, otherwise returns an error
