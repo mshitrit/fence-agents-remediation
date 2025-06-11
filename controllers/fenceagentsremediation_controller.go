@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -27,7 +28,6 @@ import (
 	commonConditions "github.com/medik8s/common/pkg/conditions"
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
-	"golang.org/x/exp/maps"
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"

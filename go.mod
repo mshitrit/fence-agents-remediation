@@ -10,7 +10,6 @@ require (
 	github.com/openshift/api v0.0.0-20230621174358-ea40115b9fa6
 	github.com/openshift/client-go v0.0.0-20230626133714-296133fbf75e
 	go.uber.org/zap v1.26.0
-	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
 	k8s.io/client-go v0.29.0
@@ -56,6 +55,7 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
