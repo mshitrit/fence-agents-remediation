@@ -496,18 +496,14 @@ func addSecretsToSharedParams(testShareParam map[v1alpha1.ParameterName]string) 
 }
 
 func generateSecretResource() *corev1.Secret {
-	dataBytes := make(map[string][]byte)
-	for key, value := range secretMap {
-		dataBytes[key] = []byte(value)
-	}
 	//using shared secret
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fence-agents-credentials-shared",
 			Namespace: operatorNsName,
 		},
-		Data: dataBytes,
-		Type: corev1.SecretTypeOpaque,
+		StringData: secretMap,
+		Type:       corev1.SecretTypeOpaque,
 	}
 	return secret
 }
