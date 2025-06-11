@@ -231,10 +231,12 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, err := r.buildFenceAgentParams(ctx, far)
+		faParams, isRetryRequired, err := r.buildFenceAgentParams(ctx, far)
 		if err != nil {
-			r.Log.Error(err, "Invalid parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
-			return emptyResult, nil
+			if !isRetryRequired {
+				return emptyResult, nil
+			}
+			return emptyResult, err
 		}
 
 		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(faParams)...)
@@ -408,12 +410,12 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, error) {
+func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, bool, error) {
 	nodeName := getNodeName(far)
 	secretParams, err := r.collectRemediationSecretParams(ctx, far)
 	if err != nil {
 		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
-		return nil, err
+		return nil, true, err
 	}
 
 	fenceAgentParams := make(map[v1alpha1.ParameterName]string)
@@ -422,11 +424,11 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		// Verify action must be reboot
 		if err := validateRebootAction(paramName, paramVal, r.Log); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		// Verify param isn't already defined
 		if err := validateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		fenceAgentParams[paramName] = paramVal
 	}
@@ -436,7 +438,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
 			// Verify action must be reboot
 			if err := validateRebootAction(paramName, nodeVal, r.Log); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			// For node params we don't enforce uniqueness node param value will override shared param
 			if _, exist := fenceAgentParams[paramName]; exist {
@@ -454,10 +456,10 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 		secretParam := v1alpha1.ParameterName(secretKey)
 		// Verify action must be reboot
 		if err := validateRebootAction(secretParam, secretVal, r.Log); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if err := validateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		fenceAgentParams[secretParam] = secretVal
 	}
@@ -465,7 +467,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	if len(fenceAgentParams) == 0 {
 		err := errors.New(errorMissingParams)
 		r.Log.Error(err, "Missing parameters")
-		return nil, err
+		return nil, false, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
@@ -474,7 +476,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 		fenceAgentParams[parameterActionName] = parameterActionValue
 	}
 
-	return fenceAgentParams, nil
+	return fenceAgentParams, false, nil
 }
 
 func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
