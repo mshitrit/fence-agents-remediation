@@ -1,11 +1,15 @@
 package validation
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
@@ -22,6 +26,10 @@ const (
 	//out of service taint strategy const (supported from 1.26)
 	minK8sMajorVersionOutOfServiceTaint = 1
 	minK8sMinorVersionOutOfServiceTaint = 26
+
+	// Parameter validation constants
+	parameterValidationTimeout = 30 * time.Second
+	fenceAgentsDirectory       = "/usr/sbin/"
 )
 
 type OutOfServiceTaintValidator struct {
@@ -33,9 +41,146 @@ type validateAgentExistence struct {
 	agentExists AgentExists
 }
 
+// ParameterValidationResult contains the results of parameter validation
+type ParameterValidationResult struct {
+	IsValid      bool
+	Errors       []string
+	Warnings     []string
+	StatusOutput string
+}
+
+// FenceAgentParameterValidator validates fence agent parameters
+type FenceAgentParameterValidator struct {
+	timeout time.Duration
+}
+
+// NewFenceAgentParameterValidator creates a new parameter validator
+func NewFenceAgentParameterValidator() *FenceAgentParameterValidator {
+	return &FenceAgentParameterValidator{
+		timeout: parameterValidationTimeout,
+	}
+}
+
+// ValidateParametersWithStatus validates fence agent parameters by running a status command
+func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[string]string) (*ParameterValidationResult, error) {
+	result := &ParameterValidationResult{
+		IsValid:  true,
+		Errors:   []string{},
+		Warnings: []string{},
+	}
+
+	if agent == "" {
+		result.IsValid = false
+		result.Errors = append(result.Errors, "empty agent name")
+		return result, nil
+	}
+
+	// Build command with status action
+	command := []string{agent, "--action", "status"}
+
+	// Add parameters (excluding action parameters to avoid conflicts)
+	for paramName, paramValue := range parameters {
+		if paramName != "action" && paramName != "--action" {
+			command = append(command, fmt.Sprintf("--%s", paramName), paramValue)
+		}
+	}
+
+	// Run the status command with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), v.timeout)
+	defer cancel()
+
+	loggerValidation.Info("Testing fence agent status command", "agent", agent, "command", command)
+
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	var outBuilder, errBuilder strings.Builder
+	cmd.Stdout = &outBuilder
+	cmd.Stderr = &errBuilder
+
+	err := cmd.Run()
+	stdout := outBuilder.String()
+	stderr := errBuilder.String()
+	result.StatusOutput = stdout
+
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("status command timed out after %v", v.timeout))
+			return result, nil
+		}
+
+		// Check if it's a parameter-related error vs connectivity error
+		stderrLower := strings.ToLower(stderr)
+		stdoutLower := strings.ToLower(stdout)
+
+		// Parameter validation errors (hard failures)
+		parameterErrors := []string{
+			"unrecognized", "invalid", "unknown option", "unknown argument",
+			"required argument", "missing argument", "bad parameter",
+		}
+
+		isParameterError := false
+		for _, errPattern := range parameterErrors {
+			if strings.Contains(stderrLower, errPattern) || strings.Contains(stdoutLower, errPattern) {
+				isParameterError = true
+				break
+			}
+		}
+
+		if isParameterError {
+			result.IsValid = false
+			result.Errors = append(result.Errors, fmt.Sprintf("fence agent parameter validation failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout))
+		} else {
+			// Connectivity or other runtime errors (warnings only)
+			result.Warnings = append(result.Warnings, fmt.Sprintf("fence agent connectivity test failed (this may be expected): %v", err))
+		}
+
+		return result, nil
+	}
+
+	loggerValidation.Info("Fence agent status command succeeded", "agent", agent, "stdout", stdout)
+	return result, nil
+}
+
+// ValidateActionParameter validates that action parameters are set correctly
+func ValidateActionParameter(paramName, paramValue string) error {
+	actionParams := []string{"action", "--action"}
+
+	for _, actionParam := range actionParams {
+		if paramName == actionParam {
+			if paramValue != "reboot" && paramValue != "" {
+				return fmt.Errorf("action parameter '%s' must be 'reboot' or empty, got '%s'", paramName, paramValue)
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateParameterConsistency checks for parameter conflicts and structural issues
+func ValidateParameterConsistency(sharedParams map[string]string, nodeParams map[string]map[string]string) []error {
+	var errors []error
+
+	// Validate node parameters structure
+	for paramName, nodeMap := range nodeParams {
+		if len(nodeMap) == 0 {
+			errors = append(errors, fmt.Errorf("node parameter '%s' is defined but has no node mappings", paramName))
+			continue
+		}
+
+		for nodeName, paramValue := range nodeMap {
+			if nodeName == "" {
+				errors = append(errors, fmt.Errorf("empty node name found in parameter '%s'", paramName))
+			}
+			if paramValue == "" {
+				errors = append(errors, fmt.Errorf("empty parameter value for node '%s' in parameter '%s'", nodeName, paramName))
+			}
+		}
+	}
+
+	return errors
+}
+
 // isAgentFileExists returns true if the agent name matches a binary, and false otherwise
 func isAgentFileExists(agent string) (bool, error) {
-	directory := "/usr/sbin/"
+	directory := fenceAgentsDirectory
 	// Create the full path by joining the directory and filename
 	fullPath := filepath.Join(directory, agent)
 

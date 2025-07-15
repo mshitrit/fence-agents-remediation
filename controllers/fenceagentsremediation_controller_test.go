@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 	commonConditions "github.com/medik8s/common/pkg/conditions"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -598,6 +599,51 @@ var _ = Describe("FAR Controller", func() {
 					g.Expect(utils.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeFalse(), "out-of-service taint should be removed")
 				}, timeoutPostRemediation, pollInterval).Should(Succeed())
 				verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+			})
+		})
+
+		When("A FAR remediation that was timed out by NHC is deleted", func() {
+			BeforeEach(func() {
+				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
+			})
+
+			It("should cleanup the node taints and remove the finalizer", func() {
+				By("Waiting for normal FAR processing to add taints")
+				// Wait for the normal FAR flow to add both taints
+				Eventually(func(g Gomega) {
+					node := &corev1.Node{}
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+					g.Expect(utils.TaintExists(node.Spec.Taints, &farRemediationTaint)).To(BeTrue(), "remediation taint should be added by normal FAR flow")
+					g.Expect(utils.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeTrue(), "out-of-service taint should be added by normal FAR flow")
+				}, timeoutPostRemediation, pollInterval).Should(Succeed())
+
+				By("Adding NHC timeout annotation to existing FAR CR")
+				Eventually(func(g Gomega) {
+					currentFAR := &v1alpha1.FenceAgentsRemediation{}
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: underTestFAR.Name, Namespace: underTestFAR.Namespace}, currentFAR)).To(Succeed())
+					if currentFAR.Annotations == nil {
+						currentFAR.Annotations = make(map[string]string)
+					}
+					currentFAR.Annotations[commonAnnotations.NhcTimedOut] = "true"
+					g.Expect(k8sClient.Update(context.Background(), currentFAR)).To(Succeed())
+				}, timeoutPreRemediation, pollInterval).Should(Succeed())
+
+				By("Deleting the FAR CR to trigger NHC timeout cleanup logic")
+				Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
+
+				By("Verifying both taints are removed")
+				Eventually(func(g Gomega) {
+					node := &corev1.Node{}
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+					g.Expect(utils.TaintExists(node.Spec.Taints, &farRemediationTaint)).To(BeFalse(), "remediation taint should be removed")
+					g.Expect(utils.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeFalse(), "out-of-service taint should be removed")
+				}, timeoutPostRemediation, pollInterval).Should(Succeed())
+
+				By("Verifying correct cleanup events are emitted")
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveFinalizer, utils.EventMessageRemoveFinalizer)
 			})
 		})
 	})
