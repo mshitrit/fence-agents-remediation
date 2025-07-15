@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,13 +52,13 @@ func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manage
 var _ webhook.Defaulter = &FenceAgentsRemediationTemplate{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) Default() {
-	webhookFARTemplateLog.Info("default", "name", farTemplate.Name)
-	if farTemplate.GetAnnotations() == nil {
-		farTemplate.Annotations = make(map[string]string)
+func (r *FenceAgentsRemediationTemplate) Default() {
+	webhookFARTemplateLog.Info("default", "name", r.Name)
+	if r.GetAnnotations() == nil {
+		r.Annotations = make(map[string]string)
 	}
-	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
-		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
+	if _, isSameKindAnnotationSet := r.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
+		r.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
 }
 
@@ -67,26 +68,26 @@ func (farTemplate *FenceAgentsRemediationTemplate) Default() {
 var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
-	webhookFARTemplateLog.Info("validate create", "name", farTemplate.Name)
-	return validateFARTemplate(farTemplate)
+func (r *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
+	webhookFARTemplateLog.Info("validate create", "name", r.Name)
+	return r.validateFARTemplate(webhookFARTemplateLog)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	webhookFARTemplateLog.Info("validate update", "name", farTemplate.Name)
-	return validateFARTemplate(farTemplate)
+func (r *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+	webhookFARTemplateLog.Info("validate update", "name", r.Name)
+	return r.validateFARTemplate(webhookFARTemplateLog)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, error) {
-	webhookFARTemplateLog.Info("validate delete", "name", farTemplate.Name)
+func (r *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, error) {
+	webhookFARTemplateLog.Info("validate delete", "name", r.Name)
 	return nil, nil
 }
 
 // validateFARTemplate performs comprehensive validation of the FenceAgentsRemediationTemplate
-func validateFARTemplate(farTemplate *FenceAgentsRemediationTemplate) (admission.Warnings, error) {
-	spec := &farTemplate.Spec.Template.Spec
+func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger) (admission.Warnings, error) {
+	spec := &r.Spec.Template.Spec
 	var warnings []string
 
 	// First, run the existing FAR validation logic
@@ -100,7 +101,7 @@ func validateFARTemplate(farTemplate *FenceAgentsRemediationTemplate) (admission
 	}
 
 	// Perform enhanced parameter validation
-	paramValidationErrors := validateFenceAgentParameters(spec, &warnings)
+	paramValidationErrors := r.validateFenceAgentParameters(&warnings, logger)
 
 	// Combine validation errors
 	var allErrors []error
@@ -115,8 +116,9 @@ func validateFARTemplate(farTemplate *FenceAgentsRemediationTemplate) (admission
 
 // validateFenceAgentParameters validates the fence agent parameters according to custom rules
 // and optionally tests them with an actual status command
-func validateFenceAgentParameters(spec *FenceAgentsRemediationSpec, warnings *[]string) []error {
+func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(warnings *[]string, logger logr.Logger) []error {
 	var validationErrors []error
+	spec := &r.Spec.Template.Spec
 
 	// Convert types for validation package
 	sharedParams := make(map[string]string)
@@ -138,15 +140,15 @@ func validateFenceAgentParameters(spec *FenceAgentsRemediationSpec, warnings *[]
 
 	// Validate action parameters using validation package
 	for paramName, paramValue := range sharedParams {
-		if err := validation.ValidateActionParameter(paramName, paramValue); err != nil {
+		if err := validation.ValidateActionParameter(paramName, paramValue, logger); err != nil {
 			validationErrors = append(validationErrors, err)
 		}
 	}
 	for paramName, nodeMap := range nodeParams {
-		for nodeName, paramValue := range nodeMap {
-			if err := validation.ValidateActionParameter(paramName, paramValue); err != nil {
-				// Create node-specific error message
-				validationErrors = append(validationErrors, fmt.Errorf("action parameter '%s' for node '%s' must be 'reboot' or empty, got '%s'", paramName, nodeName, paramValue))
+		for _, paramValue := range nodeMap {
+			if err := validation.ValidateActionParameter(paramName, paramValue, logger); err != nil {
+				// Use the validation error directly for consistency
+				validationErrors = append(validationErrors, err)
 			}
 		}
 	}

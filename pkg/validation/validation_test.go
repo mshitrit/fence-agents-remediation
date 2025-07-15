@@ -4,7 +4,10 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/version"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var dummyLogger = logf.Log.WithName("dummy-logger")
 
 func Test_setOutOfTaintSupportedFlag(t *testing.T) {
 	type args struct {
@@ -75,21 +78,21 @@ func TestValidateActionParameter(t *testing.T) {
 			paramName:   "action",
 			paramValue:  "status",
 			expectError: true,
-			errorMsg:    "action parameter 'action' must be 'reboot' or empty, got 'status'",
+			errorMsg:    "FAR doesn't support any other action than reboot",
 		},
 		{
 			name:        "invalid action off",
 			paramName:   "action",
 			paramValue:  "off",
 			expectError: true,
-			errorMsg:    "action parameter 'action' must be 'reboot' or empty, got 'off'",
+			errorMsg:    "FAR doesn't support any other action than reboot",
 		},
 		{
 			name:        "invalid alt action off",
 			paramName:   "--action",
 			paramValue:  "off",
 			expectError: true,
-			errorMsg:    "action parameter '--action' must be 'reboot' or empty, got 'off'",
+			errorMsg:    "FAR doesn't support any other action than reboot",
 		},
 		{
 			name:        "non-action parameter",
@@ -101,7 +104,7 @@ func TestValidateActionParameter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateActionParameter(tt.paramName, tt.paramValue)
+			err := ValidateActionParameter(tt.paramName, tt.paramValue, dummyLogger)
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("ValidateActionParameter() expected error but got none")

@@ -70,7 +70,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					}
 					warnings, err := farTemplate.ValidateCreate()
 					ExpectWithOffset(1, warnings).To(BeEmpty())
-					Expect(err).To(MatchError(ContainSubstring("action parameter 'action' must be 'reboot' or empty, got 'status'")))
+					Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot")))
 				})
 			})
 
@@ -168,7 +168,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					}
 					warnings, err := farTemplate.ValidateCreate()
 					ExpectWithOffset(1, warnings).To(BeEmpty())
-					Expect(err).To(MatchError(ContainSubstring("action parameter 'action' for node 'worker-1' must be 'reboot' or empty, got 'off'")))
+					Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot")))
 				})
 			})
 
@@ -197,7 +197,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					}
 					warnings, err := farTemplate.ValidateCreate()
 					ExpectWithOffset(1, warnings).To(BeEmpty())
-					Expect(err).To(MatchError(ContainSubstring("action parameter '--action' must be 'reboot' or empty, got 'status'")))
+					Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot")))
 				})
 			})
 		})
@@ -279,7 +279,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				}
 				warnings, err := farTemplate.ValidateUpdate(oldFARTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
-				Expect(err).To(MatchError(ContainSubstring("action parameter 'action' must be 'reboot' or empty, got 'off'")))
+				Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot")))
 			})
 		})
 

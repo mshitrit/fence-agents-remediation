@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
+
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -30,6 +32,10 @@ const (
 	// Parameter validation constants
 	parameterValidationTimeout = 30 * time.Second
 	fenceAgentsDirectory       = "/usr/sbin/"
+
+	ParameterActionName  = "--" + actionName
+	actionName           = "action"
+	ParameterActionValue = "reboot"
 )
 
 type OutOfServiceTaintValidator struct {
@@ -141,15 +147,12 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 }
 
 // ValidateActionParameter validates that action parameters are set correctly
-func ValidateActionParameter(paramName, paramValue string) error {
-	actionParams := []string{"action", "--action"}
-
-	for _, actionParam := range actionParams {
-		if paramName == actionParam {
-			if paramValue != "reboot" && paramValue != "" {
-				return fmt.Errorf("action parameter '%s' must be 'reboot' or empty, got '%s'", paramName, paramValue)
-			}
-		}
+func ValidateActionParameter(paramName, paramVal string, logger logr.Logger) error {
+	if (paramName == actionName || paramName == ParameterActionName) && paramVal != "" && paramVal != ParameterActionValue {
+		// --action parameter with a different value from reboot is not supported
+		err := fmt.Errorf("FAR doesn't support any other action than reboot")
+		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
+		return err
 	}
 	return nil
 }
