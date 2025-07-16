@@ -134,10 +134,6 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(warnings *
 		}
 	}
 
-	// Validate parameter consistency using validation package
-	consistencyErrors := validation.ValidateParameterConsistency(sharedParams, nodeParams)
-	validationErrors = append(validationErrors, consistencyErrors...)
-
 	// Validate action parameters using validation package
 	for paramName, paramValue := range sharedParams {
 		if err := validation.ValidateActionParameter(paramName, paramValue, logger); err != nil {

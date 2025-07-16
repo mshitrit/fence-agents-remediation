@@ -157,30 +157,6 @@ func ValidateActionParameter(paramName, paramVal string, logger logr.Logger) err
 	return nil
 }
 
-// ValidateParameterConsistency checks for parameter conflicts and structural issues
-func ValidateParameterConsistency(sharedParams map[string]string, nodeParams map[string]map[string]string) []error {
-	var errors []error
-
-	// Validate node parameters structure
-	for paramName, nodeMap := range nodeParams {
-		if len(nodeMap) == 0 {
-			errors = append(errors, fmt.Errorf("node parameter '%s' is defined but has no node mappings", paramName))
-			continue
-		}
-
-		for nodeName, paramValue := range nodeMap {
-			if nodeName == "" {
-				errors = append(errors, fmt.Errorf("empty node name found in parameter '%s'", paramName))
-			}
-			if paramValue == "" {
-				errors = append(errors, fmt.Errorf("empty parameter value for node '%s' in parameter '%s'", nodeName, paramName))
-			}
-		}
-	}
-
-	return errors
-}
-
 // isAgentFileExists returns true if the agent name matches a binary, and false otherwise
 func isAgentFileExists(agent string) (bool, error) {
 	directory := fenceAgentsDirectory
