@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +39,8 @@ const (
 	ParameterActionValue           = "reboot"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
 )
+
+type ParameterName string
 
 type OutOfServiceTaintValidator struct {
 	isOutOfServiceTaintSupported bool
@@ -160,7 +161,7 @@ func ValidateActionParameter(paramName, paramVal string, logger logr.Logger) err
 	return nil
 }
 
-func ValidateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]string, paramName v1alpha1.ParameterName, logger logr.Logger) error {
+func ValidateUniqueParam(fenceAgentParamNames map[ParameterName]string, paramName ParameterName, logger logr.Logger) error {
 	if _, exist := fenceAgentParamNames[paramName]; exist {
 		err := errors.New(errorParamDefinedMultipleTimes)
 		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)

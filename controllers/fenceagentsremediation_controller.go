@@ -228,7 +228,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, isRetryRequired, err := r.buildFenceAgentParams(ctx, far)
+		fenceAgentParams, isRetryRequired, err := r.buildFenceAgentParams(ctx, far)
 		if err != nil {
 			if !isRetryRequired {
 				return emptyResult, nil
@@ -236,8 +236,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			return emptyResult, err
 		}
 
-		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(faParams)...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", maps.Keys(faParams))
+		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(fenceAgentParams)...)
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", maps.Keys(fenceAgentParams))
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -288,7 +288,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 }
 
 // mapToSliceConvert converts param value map to slice
-func mapToSliceConvert(fenceAgentParams map[v1alpha1.ParameterName]string) []string {
+func mapToSliceConvert(fenceAgentParams map[validation.ParameterName]string) []string {
 	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
 	for paramName, paramVal := range fenceAgentParams {
 		fenceAgentParamsSlice = appendParamToSlice(fenceAgentParamsSlice, paramName, paramVal)
@@ -405,9 +405,97 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 	return secret, nil
 }
 
+// validateFenceAgentParams validates all fence agent parameters without building the map
+func (r *FenceAgentsRemediationReconciler) validateFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) error {
+	nodeName := getNodeName(far)
+	// Track parameter names for uniqueness validation
+	existingParams := make(map[validation.ParameterName]bool)
+
+	// Validate shared parameters
+	for paramName, paramVal := range far.Spec.SharedParameters {
+		// Verify action must be reboot
+		if err := validation.ValidateActionParameter(string(paramName), paramVal, r.Log); err != nil {
+			return err
+		}
+		// Verify param isn't already defined
+		if existingParams[paramName] {
+			err := errors.New("invalid multiple definition of FAR param")
+			r.Log.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+			return err
+		}
+		existingParams[paramName] = true
+	}
+
+	// Validate node parameters
+	for paramName, nodeMap := range far.Spec.NodeParameters {
+		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
+			// Verify action must be reboot
+			if err := validation.ValidateActionParameter(string(paramName), nodeVal, r.Log); err != nil {
+				return err
+			}
+			// For node params we don't enforce uniqueness as node param value will override shared param
+			existingParams[paramName] = true
+		}
+	}
+	//TODO mshitrit merge template validation logic here
+	// Validate secret parameters
+	for secretKey, secretVal := range secretParams {
+		secretParam := validation.ParameterName(secretKey)
+		// Verify action must be reboot
+		if err := validation.ValidateActionParameter(string(secretParam), secretVal, r.Log); err != nil {
+			return err
+		}
+		if existingParams[secretParam] {
+			err := errors.New("invalid multiple definition of FAR param")
+			r.Log.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
+			return err
+		}
+		existingParams[secretParam] = true
+	}
+
+	return nil
+}
+
+// buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
+func (r *FenceAgentsRemediationReconciler) buildFenceAgentParamsMap(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) (map[validation.ParameterName]string, error) {
+	nodeName := getNodeName(far)
+	fenceAgentParams := make(map[validation.ParameterName]string)
+
+	// Add shared parameters
+	for paramName, paramVal := range far.Spec.SharedParameters {
+		fenceAgentParams[paramName] = paramVal
+	}
+
+	// Add node parameters (these can override shared parameters)
+	for paramName, nodeMap := range far.Spec.NodeParameters {
+		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
+			if _, exist := fenceAgentParams[paramName]; exist {
+				r.Log.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
+			}
+			fenceAgentParams[paramName] = nodeVal
+		} else {
+			r.Log.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
+		}
+	}
+
+	// Add secret parameters
+	for secretKey, secretVal := range secretParams {
+		secretParam := validation.ParameterName(secretKey)
+		fenceAgentParams[secretParam] = secretVal
+	}
+
+	if len(fenceAgentParams) == 0 {
+		err := errors.New(errorMissingParams)
+		r.Log.Error(err, "Missing parameters")
+		return nil, err
+	}
+
+	return fenceAgentParams, nil
+}
+
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, bool, error) {
+func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[validation.ParameterName]string, bool, error) {
 	nodeName := getNodeName(far)
 	secretParams, err := r.collectRemediationSecretParams(ctx, far)
 	if err != nil {
@@ -415,56 +503,15 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 		return nil, true, err
 	}
 
-	fenceAgentParams := make(map[v1alpha1.ParameterName]string)
-
-	// append shared parameters
-	for paramName, paramVal := range far.Spec.SharedParameters {
-		// Verify action must be reboot
-		if err := validation.ValidateActionParameter(string(paramName), paramVal, r.Log); err != nil {
-			return nil, false, err
-		}
-		// Verify param isn't already defined
-		if err := validation.ValidateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
-			return nil, false, err
-		}
-		fenceAgentParams[paramName] = paramVal
-	}
-
-	// append node parameters
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
-			// Verify action must be reboot
-			if err := validation.ValidateActionParameter(string(paramName), nodeVal, r.Log); err != nil {
-				return nil, false, err
-			}
-			// For node params we don't enforce uniqueness node param value will override shared param
-			if _, exist := fenceAgentParams[paramName]; exist {
-				r.Log.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
-			}
-			fenceAgentParams[paramName] = nodeVal
-
-		} else {
-			r.Log.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
-		}
-	}
-
-	// append secret parameters
-	for secretKey, secretVal := range secretParams {
-		secretParam := v1alpha1.ParameterName(secretKey)
-		// Verify action must be reboot
-		if err := validation.ValidateActionParameter(string(secretParam), secretVal, r.Log); err != nil {
-			return nil, false, err
-		}
-		if err := validation.ValidateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
-			return nil, false, err
-		}
-		fenceAgentParams[secretParam] = secretVal
-	}
-
-	if len(fenceAgentParams) == 0 {
-		err := errors.New(errorMissingParams)
-		r.Log.Error(err, "Missing parameters")
+	// First validate all parameters
+	if err := r.validateFenceAgentParams(far, secretParams); err != nil {
 		return nil, false, err
+	}
+
+	// If validation passes, build the parameters map
+	fenceAgentParams, err := r.buildFenceAgentParamsMap(far, secretParams)
+	if err != nil {
+		return nil, true, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
@@ -477,7 +524,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
-func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterName, paramVal string) []string {
+func appendParamToSlice(fenceAgentParams []string, paramName validation.ParameterName, paramVal string) []string {
 	stringParam := string(paramName)
 	if paramVal != "" {
 		fenceAgentParams = append(fenceAgentParams, fmt.Sprintf("%s=%s", stringParam, paramVal))

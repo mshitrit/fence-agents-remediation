@@ -5,6 +5,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
@@ -104,7 +106,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
+				farTemplate.Spec.Template.Spec.SharedParameters = map[validation.ParameterName]string{
 					"action": "off", // Invalid action
 				}
 				warnings, err := farTemplate.ValidateUpdate(oldFARTemplate)

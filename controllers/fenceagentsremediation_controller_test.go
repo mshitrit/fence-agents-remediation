@@ -36,6 +36,7 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 const (
@@ -67,20 +68,20 @@ var _ = Describe("FAR Controller", func() {
 		nodeSecret, sharedSecret = &corev1.Secret{}, &corev1.Secret{}
 	)
 
-	noActionShareParam := map[v1alpha1.ParameterName]string{
+	noActionShareParam := map[validation.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}
-	testShareParam := map[v1alpha1.ParameterName]string{
+	testShareParam := map[validation.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
 		"--action":   "reboot",
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}
-	testShareParamTwice := map[v1alpha1.ParameterName]string{
+	testShareParamTwice := map[validation.ParameterName]string{
 		"--username": "admin",
 		"--ipport":   "600",
 		"--password": "password",
@@ -88,7 +89,7 @@ var _ = Describe("FAR Controller", func() {
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}
-	testNodeParam := map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
+	testNodeParam := map[validation.ParameterName]map[v1alpha1.NodeName]string{
 		"--ipport": {
 			"master-0": "6230",
 			"master-1": "6231",
@@ -184,8 +185,8 @@ var _ = Describe("FAR Controller", func() {
 				When("A param is defined both in sharedSecret and in shared params", func() {
 					BeforeEach(func() {
 						dupParamKey := "--mockparam"
-						testShareParam[v1alpha1.ParameterName(dupParamKey)] = "mockValue"
-						DeferCleanup(func() { delete(testShareParam, v1alpha1.ParameterName(dupParamKey)) })
+						testShareParam[validation.ParameterName(dupParamKey)] = "mockValue"
+						DeferCleanup(func() { delete(testShareParam, validation.ParameterName(dupParamKey)) })
 
 						sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
 							dupParamKey: []byte("mockValue"),
@@ -208,8 +209,8 @@ var _ = Describe("FAR Controller", func() {
 				When("A param is defined both in sharedSecret and in node params", func() {
 					BeforeEach(func() {
 						dupParamKey := "--mockparam"
-						testNodeParam[v1alpha1.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
-						DeferCleanup(func() { delete(testNodeParam, v1alpha1.ParameterName(dupParamKey)) })
+						testNodeParam[validation.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
+						DeferCleanup(func() { delete(testNodeParam, validation.ParameterName(dupParamKey)) })
 
 						sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
 							dupParamKey: []byte("mockValue"),
@@ -231,8 +232,8 @@ var _ = Describe("FAR Controller", func() {
 				When("A param is defined both in node Secret and in shared params", func() {
 					BeforeEach(func() {
 						dupParamKey := "--mockparam"
-						testShareParam[v1alpha1.ParameterName(dupParamKey)] = "mockValue"
-						DeferCleanup(func() { delete(testShareParam, v1alpha1.ParameterName(dupParamKey)) })
+						testShareParam[validation.ParameterName(dupParamKey)] = "mockValue"
+						DeferCleanup(func() { delete(testShareParam, validation.ParameterName(dupParamKey)) })
 
 						nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
 							dupParamKey: []byte("mockValue"),
@@ -255,8 +256,8 @@ var _ = Describe("FAR Controller", func() {
 				When("A param is defined both in node Secret and in node params", func() {
 					BeforeEach(func() {
 						dupParamKey := "--mockparam"
-						testNodeParam[v1alpha1.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
-						DeferCleanup(func() { delete(testNodeParam, v1alpha1.ParameterName(dupParamKey)) })
+						testNodeParam[validation.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
+						DeferCleanup(func() { delete(testNodeParam, validation.ParameterName(dupParamKey)) })
 
 						nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
 							dupParamKey: []byte("mockValue"),
@@ -650,7 +651,7 @@ var _ = Describe("FAR Controller", func() {
 })
 
 // getFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
-func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[validation.ParameterName]string, nodeparameters map[validation.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	sharedSecretName := "fence-agents-credentials-shared"
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
