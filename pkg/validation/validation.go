@@ -2,7 +2,9 @@ package validation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,9 +35,10 @@ const (
 	parameterValidationTimeout = 30 * time.Second
 	fenceAgentsDirectory       = "/usr/sbin/"
 
-	ParameterActionName  = "--" + actionName
-	actionName           = "action"
-	ParameterActionValue = "reboot"
+	ParameterActionName            = "--" + actionName
+	actionName                     = "action"
+	ParameterActionValue           = "reboot"
+	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
 )
 
 type OutOfServiceTaintValidator struct {
@@ -152,6 +155,15 @@ func ValidateActionParameter(paramName, paramVal string, logger logr.Logger) err
 		// --action parameter with a different value from reboot is not supported
 		err := fmt.Errorf("FAR doesn't support any other action than reboot")
 		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
+		return err
+	}
+	return nil
+}
+
+func ValidateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]string, paramName v1alpha1.ParameterName, logger logr.Logger) error {
+	if _, exist := fenceAgentParamNames[paramName]; exist {
+		err := errors.New(errorParamDefinedMultipleTimes)
+		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
 		return err
 	}
 	return nil

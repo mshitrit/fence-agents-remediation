@@ -49,9 +49,8 @@ import (
 
 const (
 	// errors
-	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
-	errorFailGettingSecret         = "failed to get secret `%s` at namespace `%s`: %w"
+	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
+	errorFailGettingSecret = "failed to get secret `%s` at namespace `%s`: %w"
 
 	SuccessFAResponse = "Success: Rebooted"
 )
@@ -425,7 +424,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 			return nil, false, err
 		}
 		// Verify param isn't already defined
-		if err := validateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
+		if err := validation.ValidateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
 			return nil, false, err
 		}
 		fenceAgentParams[paramName] = paramVal
@@ -456,7 +455,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 		if err := validation.ValidateActionParameter(string(secretParam), secretVal, r.Log); err != nil {
 			return nil, false, err
 		}
-		if err := validateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
+		if err := validation.ValidateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
 			return nil, false, err
 		}
 		fenceAgentParams[secretParam] = secretVal
@@ -475,15 +474,6 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	}
 
 	return fenceAgentParams, false, nil
-}
-
-func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]string, paramName v1alpha1.ParameterName, logger logr.Logger) error {
-	if _, exist := fenceAgentParamNames[paramName]; exist {
-		err := errors.New(errorParamDefinedMultipleTimes)
-		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
-		return err
-	}
-	return nil
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
