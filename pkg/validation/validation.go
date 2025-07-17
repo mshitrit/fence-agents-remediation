@@ -74,6 +74,7 @@ func NewFenceAgentParameterValidator() *FenceAgentParameterValidator {
 
 // ValidateParametersWithStatus validates fence agent parameters by running a status command
 func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[string]string) (*ParameterValidationResult, error) {
+	//TODO mshitrit make sure this returns only error
 	result := &ParameterValidationResult{
 		IsValid:  true,
 		Errors:   []string{},
@@ -251,6 +252,7 @@ func (v *OutOfServiceTaintValidator) setOutOfServiceTaintSupportedFlag(version *
 	return nil
 }
 
+// TODO mshitrit add logger here
 // ValidateFenceAgentParams validates all fence agent parameters without building the map
 func ValidateFenceAgentParams(
 	sharedParameters map[ParameterName]string,

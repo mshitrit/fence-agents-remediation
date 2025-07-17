@@ -101,78 +101,62 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger)
 	}
 
 	// Perform enhanced parameter validation
-	paramValidationErrors := r.validateFenceAgentParameters(&warnings, logger)
+	paramValidationErrors := r.validateFenceAgentParameters(logger)
 
 	// Combine validation errors
 	var allErrors []error
 	if basicErr != nil {
 		allErrors = append(allErrors, basicErr)
 	}
-	allErrors = append(allErrors, paramValidationErrors...)
+	allErrors = append(allErrors, paramValidationErrors)
 	aggregated := errors.NewAggregate(allErrors)
 
-	return admission.Warnings(warnings), aggregated
+	return warnings, aggregated
 }
 
 // validateFenceAgentParameters validates the fence agent parameters according to custom rules
 // and optionally tests them with an actual status command
-func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(warnings *[]string, logger logr.Logger) []error {
-	var validationErrors []error
+func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(logger logr.Logger) error {
+	//var validationErrors []error
 	spec := &r.Spec.Template.Spec
 
-	// Convert types for validation package
+	// Use the validation package to validate parameters
+	// For templates, we don't have secret parameters or a specific node name
+	//TODO mshitrit need to collect real secret data
+	emptySecretParams := make(map[string]string)
+	//TODO mshitrit need to be triggered for every node in spec.NodeParameters
+	dummyNodeName := "" // Templates don't target a specific node
+
+	if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, dummyNodeName, logger); err != nil {
+		//validationErrors = append(validationErrors, err)
+		return err
+	}
+
+	// Convert shared parameters to map[string]string for status command testing
+	//TODO mshitrit remove this conversion
 	sharedParams := make(map[string]string)
 	for k, v := range spec.SharedParameters {
 		sharedParams[string(k)] = v
 	}
-
-	nodeParams := make(map[string]map[string]string)
-	for paramName, nodeMap := range spec.NodeParameters {
-		nodeParams[string(paramName)] = make(map[string]string)
-		for nodeName, paramValue := range nodeMap {
-			nodeParams[string(paramName)][string(nodeName)] = paramValue
-		}
-	}
-
-	// Validate action parameters using validation package
-	for paramName, paramValue := range sharedParams {
-		if err := validation.ValidateActionParameter(paramName, paramValue, logger); err != nil {
-			validationErrors = append(validationErrors, err)
-		}
-	}
-	for paramName, nodeMap := range nodeParams {
-		for _, paramValue := range nodeMap {
-			if err := validation.ValidateActionParameter(paramName, paramValue, logger); err != nil {
-				// Use the validation error directly for consistency
-				validationErrors = append(validationErrors, err)
-			}
-		}
-	}
-
-	// Only test parameters with fence agent status command if there are no structural errors
-	if len(validationErrors) == 0 && (len(sharedParams) > 0 || len(nodeParams) > 0) {
-		result, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, sharedParams)
-		if err != nil {
-			*warnings = append(*warnings, fmt.Sprintf("Parameter validation error: %v", err))
-		} else {
-			// Add parameter validation errors as hard failures
-			validationErrors = append(validationErrors, convertValidationErrors(result.Errors)...)
-			// Add connectivity warnings only if no validation errors
-			if len(result.Errors) == 0 {
-				for _, warning := range result.Warnings {
-					*warnings = append(*warnings, warning)
+	_, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, sharedParams)
+	return err
+	/*
+				result, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, sharedParams)
+				if err != nil {
+					*warnings = append(*warnings, fmt.Sprintf("Parameter validation error: %v", err))
+				} else {
+					// Add parameter validation errors as hard failures
+					validationErrors = append(validationErrors, convertValidationErrors(result.Errors)...)
+					// Add connectivity warnings only if no validation errors
+					if len(result.Errors) == 0 {
+						for _, warning := range result.Warnings {
+							*warnings = append(*warnings, warning)
+						}
+					}
 				}
-			}
 		}
-	}
 
-	// Add warning about node-specific parameters only if no validation errors
-	if len(validationErrors) == 0 && len(nodeParams) > 0 {
-		*warnings = append(*warnings, "Template contains node-specific parameters. "+
-			"These will be validated when FenceAgentsRemediation instances are created for specific nodes.")
-	}
-
-	return validationErrors
+		return validationErrors*/
 }
 
 // convertValidationErrors converts string errors to proper error types

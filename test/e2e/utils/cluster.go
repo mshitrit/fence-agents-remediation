@@ -3,7 +3,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +11,8 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	machineclient "github.com/openshift/client-go/machine/clientset/versioned"
+
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 // Inspired from https://github.com/hybrid-cloud-patterns/patterns-operator/blob/main/controllers/pattern_controller.go#L293-L313
