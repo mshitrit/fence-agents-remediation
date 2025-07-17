@@ -249,3 +249,60 @@ func (v *OutOfServiceTaintValidator) setOutOfServiceTaintSupportedFlag(version *
 	loggerValidation.Info("out of service taint strategy", "isSupported", v.isOutOfServiceTaintSupported, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
 	return nil
 }
+
+// ValidateFenceAgentParams validates all fence agent parameters without building the map
+func ValidateFenceAgentParams(
+	sharedParameters map[string]string,
+	nodeParameters map[string]map[string]string,
+	secretParams map[string]string,
+	nodeName string,
+	logger logr.Logger,
+) error {
+	// Track parameter names for uniqueness validation
+	existingParams := make(map[ParameterName]bool)
+
+	// Validate shared parameters
+	for paramName, paramVal := range sharedParameters {
+		// Verify action must be reboot
+		if err := ValidateActionParameter(string(paramName), paramVal, logger); err != nil {
+			return err
+		}
+		// Verify param isn't already defined
+		if existingParams[ParameterName(paramName)] {
+			err := errors.New(errorParamDefinedMultipleTimes)
+			logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+			return err
+		}
+		existingParams[ParameterName(paramName)] = true
+	}
+
+	// Validate node parameters
+	for paramName, nodeMap := range nodeParameters {
+		if nodeVal, isFound := nodeMap[nodeName]; isFound {
+			// Verify action must be reboot
+			if err := ValidateActionParameter(string(paramName), nodeVal, logger); err != nil {
+				return err
+			}
+			// For node params we don't enforce uniqueness as node param value will override shared param
+			existingParams[ParameterName(paramName)] = true
+		}
+	}
+
+	//TODO mshitrit merge template validation logic here
+	// Validate secret parameters
+	for secretKey, secretVal := range secretParams {
+		secretParam := ParameterName(secretKey)
+		// Verify action must be reboot
+		if err := ValidateActionParameter(string(secretParam), secretVal, logger); err != nil {
+			return err
+		}
+		if existingParams[secretParam] {
+			err := errors.New(errorParamDefinedMultipleTimes)
+			logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
+			return err
+		}
+		existingParams[secretParam] = true
+	}
+
+	return nil
+}

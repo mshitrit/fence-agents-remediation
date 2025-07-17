@@ -381,18 +381,6 @@ func (r *FenceAgentsRemediationReconciler) collectSecretParams(ctx context.Conte
 	return secretParams, nil
 }
 
-// getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
-func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
-	ann := far.GetAnnotations()
-	if ann == nil {
-		return far.GetName()
-	}
-	if nodeName, isNodeNameAnnotationExist := ann[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
-		return nodeName
-	}
-	return far.GetName()
-}
-
 // getSecret gets a secret returns an error on failure
 func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
@@ -405,55 +393,16 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 	return secret, nil
 }
 
-// validateFenceAgentParams validates all fence agent parameters without building the map
-func (r *FenceAgentsRemediationReconciler) validateFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) error {
-	nodeName := getNodeName(far)
-	// Track parameter names for uniqueness validation
-	existingParams := make(map[validation.ParameterName]bool)
-
-	// Validate shared parameters
-	for paramName, paramVal := range far.Spec.SharedParameters {
-		// Verify action must be reboot
-		if err := validation.ValidateActionParameter(string(paramName), paramVal, r.Log); err != nil {
-			return err
-		}
-		// Verify param isn't already defined
-		if existingParams[paramName] {
-			err := errors.New("invalid multiple definition of FAR param")
-			r.Log.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
-			return err
-		}
-		existingParams[paramName] = true
+// getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
+func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
+	ann := far.GetAnnotations()
+	if ann == nil {
+		return far.GetName()
 	}
-
-	// Validate node parameters
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
-			// Verify action must be reboot
-			if err := validation.ValidateActionParameter(string(paramName), nodeVal, r.Log); err != nil {
-				return err
-			}
-			// For node params we don't enforce uniqueness as node param value will override shared param
-			existingParams[paramName] = true
-		}
+	if nodeName, isNodeNameAnnotationExist := ann[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
+		return nodeName
 	}
-	//TODO mshitrit merge template validation logic here
-	// Validate secret parameters
-	for secretKey, secretVal := range secretParams {
-		secretParam := validation.ParameterName(secretKey)
-		// Verify action must be reboot
-		if err := validation.ValidateActionParameter(string(secretParam), secretVal, r.Log); err != nil {
-			return err
-		}
-		if existingParams[secretParam] {
-			err := errors.New("invalid multiple definition of FAR param")
-			r.Log.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
-			return err
-		}
-		existingParams[secretParam] = true
-	}
-
-	return nil
+	return far.GetName()
 }
 
 // buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
@@ -504,7 +453,22 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	}
 
 	// First validate all parameters
-	if err := r.validateFenceAgentParams(far, secretParams); err != nil {
+	// Convert node parameters to map[string]map[string]string for validation
+	nodeParams := make(map[string]map[string]string)
+	for paramName, nodeMap := range far.Spec.NodeParameters {
+		nodeParams[string(paramName)] = make(map[string]string)
+		for nodeName, nodeVal := range nodeMap {
+			nodeParams[string(paramName)][string(nodeName)] = nodeVal
+		}
+	}
+
+	// Convert shared parameters to map[string]string
+	sharedParams := make(map[string]string)
+	for paramName, paramVal := range far.Spec.SharedParameters {
+		sharedParams[string(paramName)] = paramVal
+	}
+
+	if err := validation.ValidateFenceAgentParams(sharedParams, nodeParams, secretParams, nodeName, r.Log); err != nil {
 		return nil, false, err
 	}
 
