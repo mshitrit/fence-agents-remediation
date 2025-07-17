@@ -100,15 +100,15 @@ func (in *FenceAgentsRemediationSpec) DeepCopyInto(out *FenceAgentsRemediationSp
 	}
 	if in.NodeParameters != nil {
 		in, out := &in.NodeParameters, &out.NodeParameters
-		*out = make(map[validation.ParameterName]map[NodeName]string, len(*in))
+		*out = make(map[validation.ParameterName]map[validation.NodeName]string, len(*in))
 		for key, val := range *in {
-			var outVal map[NodeName]string
+			var outVal map[validation.NodeName]string
 			if val == nil {
 				(*out)[key] = nil
 			} else {
 				inVal := (*in)[key]
 				in, out := &inVal, &outVal
-				*out = make(map[NodeName]string, len(*in))
+				*out = make(map[validation.NodeName]string, len(*in))
 				for key, val := range *in {
 					(*out)[key] = val
 				}
@@ -118,7 +118,7 @@ func (in *FenceAgentsRemediationSpec) DeepCopyInto(out *FenceAgentsRemediationSp
 	}
 	if in.NodeSecretNames != nil {
 		in, out := &in.NodeSecretNames, &out.NodeSecretNames
-		*out = make(map[NodeName]string, len(*in))
+		*out = make(map[validation.NodeName]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}

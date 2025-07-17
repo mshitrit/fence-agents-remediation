@@ -89,7 +89,7 @@ var _ = Describe("FAR Controller", func() {
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}
-	testNodeParam := map[validation.ParameterName]map[v1alpha1.NodeName]string{
+	testNodeParam := map[validation.ParameterName]map[validation.NodeName]string{
 		"--ipport": {
 			"master-0": "6230",
 			"master-1": "6231",
@@ -209,7 +209,7 @@ var _ = Describe("FAR Controller", func() {
 				When("A param is defined both in sharedSecret and in node params", func() {
 					BeforeEach(func() {
 						dupParamKey := "--mockparam"
-						testNodeParam[validation.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
+						testNodeParam[validation.ParameterName(dupParamKey)] = map[validation.NodeName]string{workerNode: "mockValue"}
 						DeferCleanup(func() { delete(testNodeParam, validation.ParameterName(dupParamKey)) })
 
 						sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
@@ -256,7 +256,7 @@ var _ = Describe("FAR Controller", func() {
 				When("A param is defined both in node Secret and in node params", func() {
 					BeforeEach(func() {
 						dupParamKey := "--mockparam"
-						testNodeParam[validation.ParameterName(dupParamKey)] = map[v1alpha1.NodeName]string{workerNode: "mockValue"}
+						testNodeParam[validation.ParameterName(dupParamKey)] = map[validation.NodeName]string{workerNode: "mockValue"}
 						DeferCleanup(func() { delete(testNodeParam, validation.ParameterName(dupParamKey)) })
 
 						nodeSecret = generateSecret(nodeSecretName, map[string][]byte{
@@ -651,7 +651,7 @@ var _ = Describe("FAR Controller", func() {
 })
 
 // getFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
-func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[validation.ParameterName]string, nodeparameters map[validation.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[validation.ParameterName]string, nodeparameters map[validation.ParameterName]map[validation.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	sharedSecretName := "fence-agents-credentials-shared"
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
@@ -665,7 +665,7 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[vali
 			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 			RemediationStrategy: strategy,
 			SharedSecretName:    &sharedSecretName,
-			NodeSecretNames:     map[v1alpha1.NodeName]string{v1alpha1.NodeName(nodeName): fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)},
+			NodeSecretNames:     map[validation.NodeName]string{validation.NodeName(nodeName): fmt.Sprintf("fence-agents-credentials-node-%s", nodeName)},
 		},
 	}
 }

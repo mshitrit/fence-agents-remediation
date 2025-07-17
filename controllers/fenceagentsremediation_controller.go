@@ -351,7 +351,7 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 		}
 	}
 	// collect secret params from the node's secret
-	nodeSecretName, isFound := far.Spec.NodeSecretNames[v1alpha1.NodeName(getNodeName(far))]
+	nodeSecretName, isFound := far.Spec.NodeSecretNames[validation.NodeName(getNodeName(far))]
 	var nodeSecretParams map[string]string
 	if isFound {
 		nodeSecretParams, err = r.collectSecretParams(ctx, nodeSecretName, far.Namespace)
@@ -417,7 +417,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParamsMap(far *v1alpha
 
 	// Add node parameters (these can override shared parameters)
 	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
+		if nodeVal, isFound := nodeMap[validation.NodeName(nodeName)]; isFound {
 			if _, exist := fenceAgentParams[paramName]; exist {
 				r.Log.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
 			}

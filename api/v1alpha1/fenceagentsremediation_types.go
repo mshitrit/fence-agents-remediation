@@ -51,7 +51,6 @@ const (
 	OutOfServiceTaintRemediationStrategy = RemediationStrategyType("OutOfServiceTaint")
 )
 
-type NodeName string
 type RemediationStrategyType string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
@@ -88,7 +87,7 @@ type FenceAgentsRemediationSpec struct {
 
 	// NodeParameters are passed to the fencing agent according to the node that is fenced, since they are node specific
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeParameters map[validation.ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
+	NodeParameters map[validation.ParameterName]map[validation.NodeName]string `json:"nodeparameters,omitempty"`
 
 	// RemediationStrategy is the remediation method for unhealthy nodes.
 	// Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
@@ -103,7 +102,7 @@ type FenceAgentsRemediationSpec struct {
 	// NodeSecretNames maps the node name to the Secret name which contains params relevant for that node.
 	// +optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeSecretNames map[NodeName]string `json:"nodeSecrets,omitempty"`
+	NodeSecretNames map[validation.NodeName]string `json:"nodeSecrets,omitempty"`
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.

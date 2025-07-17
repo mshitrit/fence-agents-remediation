@@ -57,7 +57,7 @@ var (
 var _ = Describe("FAR E2e", func() {
 	var (
 		testShareParam map[validation.ParameterName]string
-		testNodeParam  map[validation.ParameterName]map[v1alpha1.NodeName]string
+		testNodeParam  map[validation.ParameterName]map[validation.NodeName]string
 	)
 	BeforeEach(func() {
 		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentAction)
@@ -190,9 +190,9 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 }
 
 // buildNodeParameters returns a map key-value of node parameters based on cluster platform type if it finds the node info list, otherwise an error
-func buildNodeParameters() (map[validation.ParameterName]map[v1alpha1.NodeName]string, error) {
+func buildNodeParameters() (map[validation.ParameterName]map[validation.NodeName]string, error) {
 	var (
-		nodeListParam  map[v1alpha1.NodeName]string
+		nodeListParam  map[validation.NodeName]string
 		nodeIdentifier validation.ParameterName
 		err            error
 	)
@@ -213,7 +213,7 @@ func buildNodeParameters() (map[validation.ParameterName]map[v1alpha1.NodeName]s
 		}
 		nodeIdentifier = nodeIdentifierPrefixIPMI
 	}
-	testNodeParam := map[validation.ParameterName]map[v1alpha1.NodeName]string{nodeIdentifier: nodeListParam}
+	testNodeParam := map[validation.ParameterName]map[validation.NodeName]string{nodeIdentifier: nodeListParam}
 	return testNodeParam, nil
 }
 
@@ -270,15 +270,15 @@ func createTestedPod(nodeName string) *corev1.Pod {
 }
 
 // printNodeDetail prints the node details
-func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, testNodeParam map[validation.ParameterName]map[v1alpha1.NodeName]string) {
-	nodeNameParam := v1alpha1.NodeName(selectedNode.Name)
+func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, testNodeParam map[validation.ParameterName]map[validation.NodeName]string) {
+	nodeNameParam := validation.NodeName(selectedNode.Name)
 	parameterName := validation.ParameterName(nodeIdentifierPrefix)
 	testNodeID := testNodeParam[parameterName][nodeNameParam]
 	log.Info("Testing Node", "Node name", selectedNode.Name, "Node ID", testNodeID)
 }
 
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
-func createFAR(nodeName string, agent string, sharedParameters map[validation.ParameterName]string, nodeParameters map[validation.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+func createFAR(nodeName string, agent string, sharedParameters map[validation.ParameterName]string, nodeParameters map[validation.ParameterName]map[validation.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{

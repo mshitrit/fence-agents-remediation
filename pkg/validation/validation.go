@@ -41,6 +41,7 @@ const (
 )
 
 type ParameterName string
+type NodeName string
 
 type OutOfServiceTaintValidator struct {
 	isOutOfServiceTaintSupported bool
@@ -264,7 +265,7 @@ func ValidateFenceAgentParams(
 	// Validate shared parameters
 	for paramName, paramVal := range sharedParameters {
 		// Verify action must be reboot
-		if err := ValidateActionParameter(string(paramName), paramVal, logger); err != nil {
+		if err := ValidateActionParameter(paramName, paramVal, logger); err != nil {
 			return err
 		}
 		// Verify param isn't already defined
