@@ -75,7 +75,7 @@ func NewFenceAgentParameterValidator() *FenceAgentParameterValidator {
 }
 
 // ValidateParametersWithStatus validates fence agent parameters by running a status command
-func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[string]string) (*ParameterValidationResult, error) {
+func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[ParameterName]string) (*ParameterValidationResult, error) {
 	//TODO mshitrit make sure this returns only error
 	result := &ParameterValidationResult{
 		IsValid:  true,
@@ -94,8 +94,8 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
-		if paramName != "action" && paramName != "--action" {
-			command = append(command, fmt.Sprintf("--%s", paramName), paramValue)
+		if string(paramName) != "action" && string(paramName) != "--action" {
+			command = append(command, fmt.Sprintf("--%s", string(paramName)), paramValue)
 		}
 	}
 

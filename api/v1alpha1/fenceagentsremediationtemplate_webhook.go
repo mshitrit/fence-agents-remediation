@@ -144,13 +144,7 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
 		}
 	}
 
-	// Convert shared parameters to map[string]string for status command testing
-	//TODO mshitrit remove this conversion
-	sharedParams := make(map[string]string)
-	for k, v := range spec.SharedParameters {
-		sharedParams[string(k)] = v
-	}
-	_, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, sharedParams)
+	_, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, spec.SharedParameters)
 	return err
 }
 

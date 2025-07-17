@@ -126,7 +126,7 @@ func TestFenceAgentParameterValidator_ValidateParametersWithStatus(t *testing.T)
 	tests := []struct {
 		name           string
 		agent          string
-		parameters     map[string]string
+		parameters     map[ParameterName]string
 		expectValid    bool
 		expectErrors   int
 		expectWarnings int
@@ -134,7 +134,7 @@ func TestFenceAgentParameterValidator_ValidateParametersWithStatus(t *testing.T)
 		{
 			name:           "empty agent name",
 			agent:          "",
-			parameters:     map[string]string{},
+			parameters:     map[ParameterName]string{},
 			expectValid:    false,
 			expectErrors:   1,
 			expectWarnings: 0,
@@ -142,9 +142,9 @@ func TestFenceAgentParameterValidator_ValidateParametersWithStatus(t *testing.T)
 		{
 			name:  "valid agent with basic parameters",
 			agent: "fence_ipmilan",
-			parameters: map[string]string{
-				"ip":       "192.168.1.100",
-				"username": "admin",
+			parameters: map[ParameterName]string{
+				ParameterName("ip"):       "192.168.1.100",
+				ParameterName("username"): "admin",
 			},
 			expectValid:    true, // Will likely fail due to connectivity, but that's a warning
 			expectErrors:   0,
@@ -153,10 +153,10 @@ func TestFenceAgentParameterValidator_ValidateParametersWithStatus(t *testing.T)
 		{
 			name:  "exclude action parameters",
 			agent: "fence_ipmilan",
-			parameters: map[string]string{
-				"action":   "reboot", // Should be excluded from status command
-				"--action": "reboot", // Should be excluded from status command
-				"ip":       "192.168.1.100",
+			parameters: map[ParameterName]string{
+				ParameterName("action"):   "reboot", // Should be excluded from status command
+				ParameterName("--action"): "reboot", // Should be excluded from status command
+				ParameterName("ip"):       "192.168.1.100",
 			},
 			expectValid:    true,
 			expectErrors:   0,
