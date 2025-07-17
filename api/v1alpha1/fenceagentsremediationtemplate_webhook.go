@@ -99,6 +99,7 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger)
 			warnings = append(warnings, string(w))
 		}
 	}
+	//TODO mshitrit simplify the validateFARTemplate > validateFenceAgentParameters > ValidateFenceAgentParams chain
 
 	// Perform enhanced parameter validation
 	paramValidationErrors := r.validateFenceAgentParameters(logger)
@@ -117,19 +118,31 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger)
 // validateFenceAgentParameters validates the fence agent parameters according to custom rules
 // and optionally tests them with an actual status command
 func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(logger logr.Logger) error {
-	//var validationErrors []error
 	spec := &r.Spec.Template.Spec
 
-	// Use the validation package to validate parameters
-	// For templates, we don't have secret parameters or a specific node name
-	//TODO mshitrit need to collect real secret data
+	// For templates, we don't have secret parameters
 	emptySecretParams := make(map[string]string)
-	//TODO mshitrit need to be triggered for every node in spec.NodeParameters
-	dummyNodeName := "" // Templates don't target a specific node
 
-	if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, dummyNodeName, logger); err != nil {
-		//validationErrors = append(validationErrors, err)
-		return err
+	// Collect all unique node names from NodeParameters
+	nodeNames := make(map[string]bool)
+	for _, nodeMap := range spec.NodeParameters {
+		for nodeName := range nodeMap {
+			nodeNames[string(nodeName)] = true
+		}
+	}
+
+	// If no node-specific parameters, validate with empty node name (for shared parameters only)
+	if len(nodeNames) == 0 {
+		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, "", logger); err != nil {
+			return err
+		}
+	} else {
+		// Validate parameters for each node mentioned in NodeParameters
+		for nodeName := range nodeNames {
+			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, nodeName, logger); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Convert shared parameters to map[string]string for status command testing
@@ -140,23 +153,6 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(logger log
 	}
 	_, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, sharedParams)
 	return err
-	/*
-				result, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, sharedParams)
-				if err != nil {
-					*warnings = append(*warnings, fmt.Sprintf("Parameter validation error: %v", err))
-				} else {
-					// Add parameter validation errors as hard failures
-					validationErrors = append(validationErrors, convertValidationErrors(result.Errors)...)
-					// Add connectivity warnings only if no validation errors
-					if len(result.Errors) == 0 {
-						for _, warning := range result.Warnings {
-							*warnings = append(*warnings, warning)
-						}
-					}
-				}
-		}
-
-		return validationErrors*/
 }
 
 // convertValidationErrors converts string errors to proper error types
