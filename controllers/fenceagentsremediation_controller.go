@@ -397,7 +397,6 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 		far.Spec.NodeSecretNames,
 		nodeName,
 		far.Namespace,
-		r.Log,
 	)
 	if err != nil {
 		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
@@ -405,7 +404,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	}
 
 	// First validate all parameters
-	if err := validation.ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName, r.Log); err != nil {
+	if err := validation.ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
 		return nil, false, err
 	}
 

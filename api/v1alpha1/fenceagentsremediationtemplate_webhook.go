@@ -132,13 +132,13 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
 
 	// If no node-specific parameters, validate with empty node name (for shared parameters only)
 	if len(nodeNames) == 0 {
-		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, "", webhookFARTemplateLog); err != nil {
+		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, ""); err != nil {
 			return err
 		}
 	} else {
 		// Validate parameters for each node mentioned in NodeParameters
 		for nodeName := range nodeNames {
-			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, nodeName, webhookFARTemplateLog); err != nil {
+			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, nodeName); err != nil {
 				return err
 			}
 		}

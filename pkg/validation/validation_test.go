@@ -104,7 +104,7 @@ func TestValidateActionParameter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateActionParameter(tt.paramName, tt.paramValue, dummyLogger)
+			err := ValidateActionParameter(tt.paramName, tt.paramValue)
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("ValidateActionParameter() expected error but got none")

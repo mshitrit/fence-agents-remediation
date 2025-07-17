@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
-
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/version"
@@ -157,20 +155,11 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 }
 
 // ValidateActionParameter validates that action parameters are set correctly
-func ValidateActionParameter(paramName, paramVal string, logger logr.Logger) error {
+func ValidateActionParameter(paramName, paramVal string) error {
 	if (paramName == actionName || paramName == ParameterActionName) && paramVal != "" && paramVal != ParameterActionValue {
 		// --action parameter with a different value from reboot is not supported
 		err := fmt.Errorf("FAR doesn't support any other action than reboot")
-		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
-		return err
-	}
-	return nil
-}
-
-func ValidateUniqueParam(fenceAgentParamNames map[ParameterName]string, paramName ParameterName, logger logr.Logger) error {
-	if _, exist := fenceAgentParamNames[paramName]; exist {
-		err := errors.New(errorParamDefinedMultipleTimes)
-		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+		loggerValidation.Error(err, "can't build CR with this action attribute", "action", paramVal)
 		return err
 	}
 	return nil
@@ -263,7 +252,6 @@ func ValidateFenceAgentParams(
 	nodeParameters map[ParameterName]map[NodeName]string,
 	secretParams map[string]string,
 	nodeName string,
-	logger logr.Logger,
 ) error {
 	// Track parameter names for uniqueness validation
 	existingParams := make(map[ParameterName]bool)
@@ -271,13 +259,13 @@ func ValidateFenceAgentParams(
 	// Validate shared parameters
 	for paramName, paramVal := range sharedParameters {
 		// Verify action must be reboot
-		if err := ValidateActionParameter(string(paramName), paramVal, logger); err != nil {
+		if err := ValidateActionParameter(string(paramName), paramVal); err != nil {
 			return err
 		}
 		// Verify param isn't already defined
 		if existingParams[paramName] {
 			err := errors.New(errorParamDefinedMultipleTimes)
-			logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+			loggerValidation.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
 			return err
 		}
 		existingParams[paramName] = true
@@ -287,7 +275,7 @@ func ValidateFenceAgentParams(
 	for paramName, nodeMap := range nodeParameters {
 		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
 			// Verify action must be reboot
-			if err := ValidateActionParameter(string(paramName), nodeVal, logger); err != nil {
+			if err := ValidateActionParameter(string(paramName), nodeVal); err != nil {
 				return err
 			}
 			// For node params we don't enforce uniqueness as node param value will override shared param
@@ -300,12 +288,12 @@ func ValidateFenceAgentParams(
 	for secretKey, secretVal := range secretParams {
 		secretParam := ParameterName(secretKey)
 		// Verify action must be reboot
-		if err := ValidateActionParameter(string(secretParam), secretVal, logger); err != nil {
+		if err := ValidateActionParameter(string(secretParam), secretVal); err != nil {
 			return err
 		}
 		if existingParams[secretParam] {
 			err := errors.New(errorParamDefinedMultipleTimes)
-			logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
+			loggerValidation.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
 			return err
 		}
 		existingParams[secretParam] = true
@@ -322,14 +310,13 @@ func CollectRemediationSecretParams(
 	nodeSecretNames map[NodeName]string,
 	nodeName string,
 	namespace string,
-	logger logr.Logger,
 ) (map[string]string, error) {
 	secretParams := map[string]string{}
 	var err error
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
-		secretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, logger)
+		secretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -338,7 +325,7 @@ func CollectRemediationSecretParams(
 	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
 	var nodeSecretParams map[string]string
 	if isFound {
-		nodeSecretParams, err = collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, logger)
+		nodeSecretParams, err = collectSecretParams(ctx, k8sClient, nodeSecretName, namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -353,10 +340,9 @@ func collectSecretParams(
 	ctx context.Context,
 	k8sClient client.Client,
 	secretName, namespace string,
-	logger logr.Logger,
 ) (map[string]string, error) {
 	secretParams := make(map[string]string)
-	secret, err := getSecret(ctx, k8sClient, client.ObjectKey{Name: secretName, Namespace: namespace}, logger)
+	secret, err := getSecret(ctx, k8sClient, client.ObjectKey{Name: secretName, Namespace: namespace})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret `%s` at namespace `%s`: %w", secretName, namespace, err)
 	}
@@ -364,7 +350,7 @@ func collectSecretParams(
 	if secret != nil {
 		for secretKey, secretVal := range secret.Data {
 			secretParams[secretKey] = string(secretVal)
-			logger.Info("found a value from secret", "secret name", secretName, "parameter name", secretKey)
+			loggerValidation.Info("found a value from secret", "secret name", secretName, "parameter name", secretKey)
 		}
 	}
 	return secretParams, nil
@@ -375,11 +361,10 @@ func getSecret(
 	ctx context.Context,
 	k8sClient client.Client,
 	secretKeyObj client.ObjectKey,
-	logger logr.Logger,
 ) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
 	if err := k8sClient.Get(ctx, secretKeyObj, secret); err != nil && !apiErrors.IsNotFound(err) {
-		logger.Error(err, "failed to get secret", "secret name", secretKeyObj.Name, "namespace", secretKeyObj.Namespace)
+		loggerValidation.Error(err, "failed to get secret", "secret name", secretKeyObj.Name, "namespace", secretKeyObj.Namespace)
 		return nil, err
 	} else if apiErrors.IsNotFound(err) {
 		return nil, nil
