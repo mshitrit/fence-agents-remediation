@@ -487,6 +487,23 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	return fenceAgentParams, false, nil
 }
 
+// TODO mshitrit remove those
+func mapConvert[Key, ConvertedKey comparable, Value, ConvertedValue any](inputMap map[Key]Value, convertKey func(Key) ConvertedKey, convertValue func(Value) ConvertedValue) map[ConvertedKey]ConvertedValue {
+	convertedMap := map[ConvertedKey]ConvertedValue{}
+	for key, value := range inputMap {
+		convertedMap[convertKey(key)] = convertValue(value)
+	}
+	return convertedMap
+}
+
+func mapKeyConvert[Key, ConvertedKey comparable, Value any](inputMap map[Key]Value, convertKey func(Key) ConvertedKey) map[ConvertedKey]Value {
+	convertedMap := map[ConvertedKey]Value{}
+	for key, value := range inputMap {
+		convertedMap[convertKey(key)] = value
+	}
+	return convertedMap
+}
+
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
 func appendParamToSlice(fenceAgentParams []string, paramName validation.ParameterName, paramVal string) []string {
 	stringParam := string(paramName)
