@@ -29,7 +29,6 @@ import (
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
-	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -338,61 +337,6 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
-// collectRemediationSecretParams collects the parameters from the shared secret and the node secret
-func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[string]string, error) {
-	secretParams := map[string]string{}
-	var err error
-
-	// collect secret params from shared secret
-	if far.Spec.SharedSecretName != nil {
-		secretParams, err = r.collectSecretParams(ctx, *far.Spec.SharedSecretName, far.Namespace)
-		if err != nil {
-			return nil, err
-		}
-	}
-	// collect secret params from the node's secret
-	nodeSecretName, isFound := far.Spec.NodeSecretNames[validation.NodeName(getNodeName(far))]
-	var nodeSecretParams map[string]string
-	if isFound {
-		nodeSecretParams, err = r.collectSecretParams(ctx, nodeSecretName, far.Namespace)
-		if err != nil {
-			return nil, err
-		}
-		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
-		maps.Copy(secretParams, nodeSecretParams)
-	}
-	return secretParams, nil
-}
-
-// collectSecretParams reads and adds the secret params if they are available, otherwise returns an error
-func (r *FenceAgentsRemediationReconciler) collectSecretParams(ctx context.Context, secretName, namespace string) (map[string]string, error) {
-	secretParams := make(map[string]string)
-	secret, err := r.getSecret(ctx, client.ObjectKey{Name: secretName, Namespace: namespace})
-	if err != nil {
-		return nil, fmt.Errorf(errorFailGettingSecret, secretName, namespace, err)
-	}
-	// fill secret params from secret
-	if secret != nil {
-		for secretKey, secretVal := range secret.Data {
-			secretParams[secretKey] = string(secretVal)
-			r.Log.Info("found a value from secret", "secret name", secretName, "parameter name", secretKey)
-		}
-	}
-	return secretParams, nil
-}
-
-// getSecret gets a secret returns an error on failure
-func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
-	secret := &corev1.Secret{}
-	if err := r.Get(ctx, secretKeyObj, secret); err != nil && !apiErrors.IsNotFound(err) {
-		r.Log.Error(err, "failed to get secret", "secret name", secretKeyObj.Name, "namespace", secretKeyObj.Namespace)
-		return nil, err
-	} else if apiErrors.IsNotFound(err) {
-		return nil, nil
-	}
-	return secret, nil
-}
-
 // getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	ann := far.GetAnnotations()
@@ -446,7 +390,15 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParamsMap(far *v1alpha
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[validation.ParameterName]string, bool, error) {
 	nodeName := getNodeName(far)
-	secretParams, err := r.collectRemediationSecretParams(ctx, far)
+	secretParams, err := validation.CollectRemediationSecretParams(
+		ctx,
+		r.Client,
+		far.Spec.SharedSecretName,
+		far.Spec.NodeSecretNames,
+		nodeName,
+		far.Namespace,
+		r.Log,
+	)
 	if err != nil {
 		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
 		return nil, true, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,10 +15,13 @@ import (
 
 	"github.com/go-logr/logr"
 
+	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
@@ -308,4 +312,77 @@ func ValidateFenceAgentParams(
 	}
 
 	return nil
+}
+
+// CollectRemediationSecretParams collects the parameters from the shared secret and the node secret
+func CollectRemediationSecretParams(
+	ctx context.Context,
+	k8sClient client.Client,
+	sharedSecretName *string,
+	nodeSecretNames map[NodeName]string,
+	nodeName string,
+	namespace string,
+	logger logr.Logger,
+) (map[string]string, error) {
+	secretParams := map[string]string{}
+	var err error
+
+	// collect secret params from shared secret
+	if sharedSecretName != nil {
+		secretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// collect secret params from the node's secret
+	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
+	var nodeSecretParams map[string]string
+	if isFound {
+		nodeSecretParams, err = collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, logger)
+		if err != nil {
+			return nil, err
+		}
+		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
+		maps.Copy(secretParams, nodeSecretParams)
+	}
+	return secretParams, nil
+}
+
+// collectSecretParams reads and adds the secret params if they are available, otherwise returns an error
+func collectSecretParams(
+	ctx context.Context,
+	k8sClient client.Client,
+	secretName, namespace string,
+	logger logr.Logger,
+) (map[string]string, error) {
+	secretParams := make(map[string]string)
+	secret, err := getSecret(ctx, k8sClient, client.ObjectKey{Name: secretName, Namespace: namespace}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secret `%s` at namespace `%s`: %w", secretName, namespace, err)
+	}
+	// fill secret params from secret
+	if secret != nil {
+		for secretKey, secretVal := range secret.Data {
+			secretParams[secretKey] = string(secretVal)
+			logger.Info("found a value from secret", "secret name", secretName, "parameter name", secretKey)
+		}
+	}
+	return secretParams, nil
+}
+
+// getSecret gets a secret returns an error on failure
+func getSecret(
+	ctx context.Context,
+	k8sClient client.Client,
+	secretKeyObj client.ObjectKey,
+	logger logr.Logger,
+) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, secretKeyObj, secret); err != nil && !apiErrors.IsNotFound(err) {
+		logger.Error(err, "failed to get secret", "secret name", secretKeyObj.Name, "namespace", secretKeyObj.Namespace)
+		return nil, err
+	} else if apiErrors.IsNotFound(err) {
+		return nil, nil
+	}
+	return secret, nil
 }
