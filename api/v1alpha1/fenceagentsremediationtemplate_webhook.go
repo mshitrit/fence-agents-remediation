@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	"fmt"
 
-	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,13 +69,13 @@ var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate create", "name", r.Name)
-	return r.validateFARTemplate(webhookFARTemplateLog)
+	return r.validateFARTemplate()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate update", "name", r.Name)
-	return r.validateFARTemplate(webhookFARTemplateLog)
+	return r.validateFARTemplate()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -86,7 +85,7 @@ func (r *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, e
 }
 
 // validateFARTemplate performs comprehensive validation of the FenceAgentsRemediationTemplate
-func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger) (admission.Warnings, error) {
+func (r *FenceAgentsRemediationTemplate) validateFARTemplate() (admission.Warnings, error) {
 	spec := &r.Spec.Template.Spec
 	var warnings []string
 
@@ -102,7 +101,7 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger)
 	//TODO mshitrit simplify the validateFARTemplate > validateFenceAgentParameters > ValidateFenceAgentParams chain
 
 	// Perform enhanced parameter validation
-	paramValidationErrors := r.validateFenceAgentParameters(logger)
+	paramValidationErrors := r.validateFenceAgentParameters()
 
 	// Combine validation errors
 	var allErrors []error
@@ -117,7 +116,7 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate(logger logr.Logger)
 
 // validateFenceAgentParameters validates the fence agent parameters according to custom rules
 // and optionally tests them with an actual status command
-func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(logger logr.Logger) error {
+func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
 	spec := &r.Spec.Template.Spec
 
 	// For templates, we don't have secret parameters
@@ -133,13 +132,13 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters(logger log
 
 	// If no node-specific parameters, validate with empty node name (for shared parameters only)
 	if len(nodeNames) == 0 {
-		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, "", logger); err != nil {
+		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, "", webhookFARTemplateLog); err != nil {
 			return err
 		}
 	} else {
 		// Validate parameters for each node mentioned in NodeParameters
 		for nodeName := range nodeNames {
-			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, nodeName, logger); err != nil {
+			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, nodeName, webhookFARTemplateLog); err != nil {
 				return err
 			}
 		}
