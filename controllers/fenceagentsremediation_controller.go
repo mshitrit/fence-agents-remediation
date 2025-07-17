@@ -453,22 +453,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	}
 
 	// First validate all parameters
-	// Convert node parameters to map[string]map[string]string for validation
-	nodeParams := make(map[string]map[string]string)
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		nodeParams[string(paramName)] = make(map[string]string)
-		for nodeName, nodeVal := range nodeMap {
-			nodeParams[string(paramName)][string(nodeName)] = nodeVal
-		}
-	}
-
-	// Convert shared parameters to map[string]string
-	sharedParams := make(map[string]string)
-	for paramName, paramVal := range far.Spec.SharedParameters {
-		sharedParams[string(paramName)] = paramVal
-	}
-
-	if err := validation.ValidateFenceAgentParams(sharedParams, nodeParams, secretParams, nodeName, r.Log); err != nil {
+	if err := validation.ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName, r.Log); err != nil {
 		return nil, false, err
 	}
 
@@ -485,23 +470,6 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	}
 
 	return fenceAgentParams, false, nil
-}
-
-// TODO mshitrit remove those
-func mapConvert[Key, ConvertedKey comparable, Value, ConvertedValue any](inputMap map[Key]Value, convertKey func(Key) ConvertedKey, convertValue func(Value) ConvertedValue) map[ConvertedKey]ConvertedValue {
-	convertedMap := map[ConvertedKey]ConvertedValue{}
-	for key, value := range inputMap {
-		convertedMap[convertKey(key)] = convertValue(value)
-	}
-	return convertedMap
-}
-
-func mapKeyConvert[Key, ConvertedKey comparable, Value any](inputMap map[Key]Value, convertKey func(Key) ConvertedKey) map[ConvertedKey]Value {
-	convertedMap := map[ConvertedKey]Value{}
-	for key, value := range inputMap {
-		convertedMap[convertKey(key)] = value
-	}
-	return convertedMap
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty

@@ -253,8 +253,8 @@ func (v *OutOfServiceTaintValidator) setOutOfServiceTaintSupportedFlag(version *
 
 // ValidateFenceAgentParams validates all fence agent parameters without building the map
 func ValidateFenceAgentParams(
-	sharedParameters map[string]string,
-	nodeParameters map[string]map[string]string,
+	sharedParameters map[ParameterName]string,
+	nodeParameters map[ParameterName]map[NodeName]string,
 	secretParams map[string]string,
 	nodeName string,
 	logger logr.Logger,
@@ -265,27 +265,27 @@ func ValidateFenceAgentParams(
 	// Validate shared parameters
 	for paramName, paramVal := range sharedParameters {
 		// Verify action must be reboot
-		if err := ValidateActionParameter(paramName, paramVal, logger); err != nil {
+		if err := ValidateActionParameter(string(paramName), paramVal, logger); err != nil {
 			return err
 		}
 		// Verify param isn't already defined
-		if existingParams[ParameterName(paramName)] {
+		if existingParams[paramName] {
 			err := errors.New(errorParamDefinedMultipleTimes)
 			logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
 			return err
 		}
-		existingParams[ParameterName(paramName)] = true
+		existingParams[paramName] = true
 	}
 
 	// Validate node parameters
 	for paramName, nodeMap := range nodeParameters {
-		if nodeVal, isFound := nodeMap[nodeName]; isFound {
+		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
 			// Verify action must be reboot
 			if err := ValidateActionParameter(string(paramName), nodeVal, logger); err != nil {
 				return err
 			}
 			// For node params we don't enforce uniqueness as node param value will override shared param
-			existingParams[ParameterName(paramName)] = true
+			existingParams[paramName] = true
 		}
 	}
 
