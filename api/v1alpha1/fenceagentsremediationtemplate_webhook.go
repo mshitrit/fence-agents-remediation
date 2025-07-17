@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -36,9 +38,14 @@ var (
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
 	// parameterValidator for validating fence agent parameters
 	parameterValidator = validation.NewFenceAgentParameterValidator()
+	// webhookClient for accessing Kubernetes resources during validation
+	webhookClient client.Client
 )
 
 func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	// Store the client for use in validation
+	webhookClient = mgr.GetClient()
+
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
@@ -118,9 +125,28 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate() (admission.Warnin
 // and optionally tests them with an actual status command
 func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
 	spec := &r.Spec.Template.Spec
+	ctx := context.TODO()
 
-	// For templates, we don't have secret parameters
-	emptySecretParams := make(map[string]string)
+	// Collect shared secret parameters
+	var sharedSecretParams map[string]string
+	var err error
+
+	if spec.SharedSecretName != nil && webhookClient != nil {
+		sharedSecretParams, err = validation.CollectRemediationSecretParams(
+			ctx,
+			webhookClient,
+			spec.SharedSecretName,
+			spec.NodeSecretNames,
+			"", // empty node name for shared secrets only
+			r.Namespace,
+		)
+		if err != nil {
+			webhookFARTemplateLog.Info("Failed to collect shared secret params, using empty params", "error", err)
+			sharedSecretParams = make(map[string]string)
+		}
+	} else {
+		sharedSecretParams = make(map[string]string)
+	}
 
 	// Collect all unique node names from NodeParameters
 	nodeNames := make(map[string]bool)
@@ -132,19 +158,39 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
 
 	// If no node-specific parameters, validate with empty node name (for shared parameters only)
 	if len(nodeNames) == 0 {
-		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, ""); err != nil {
+		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, sharedSecretParams, ""); err != nil {
 			return err
 		}
 	} else {
 		// Validate parameters for each node mentioned in NodeParameters
 		for nodeName := range nodeNames {
-			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, emptySecretParams, nodeName); err != nil {
+			// Collect node-specific secret parameters
+			var nodeSecretParams map[string]string
+
+			if spec.NodeSecretNames != nil && webhookClient != nil {
+				nodeSecretParams, err = validation.CollectRemediationSecretParams(
+					ctx,
+					webhookClient,
+					spec.SharedSecretName,
+					spec.NodeSecretNames,
+					nodeName,
+					r.Namespace,
+				)
+				if err != nil {
+					webhookFARTemplateLog.Info("Failed to collect secret params for node, using empty params", "node", nodeName, "error", err)
+					nodeSecretParams = make(map[string]string)
+				}
+			} else {
+				nodeSecretParams = make(map[string]string)
+			}
+
+			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, nodeSecretParams, nodeName); err != nil {
 				return err
 			}
 		}
 	}
 
-	_, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, spec.SharedParameters)
+	_, err = parameterValidator.ValidateParametersWithStatus(spec.Agent, spec.SharedParameters)
 	return err
 }
 

@@ -245,7 +245,6 @@ func (v *OutOfServiceTaintValidator) setOutOfServiceTaintSupportedFlag(version *
 	return nil
 }
 
-// TODO mshitrit add logger here
 // ValidateFenceAgentParams validates all fence agent parameters without building the map
 func ValidateFenceAgentParams(
 	sharedParameters map[ParameterName]string,
