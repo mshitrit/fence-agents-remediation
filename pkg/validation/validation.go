@@ -34,11 +34,11 @@ const (
 
 	// Parameter validation constants
 	parameterValidationTimeout = 30 * time.Second
-	fenceAgentsDirectory       = "/usr/sbin/"
 
 	ParameterActionName            = "--" + actionName
 	actionName                     = "action"
-	ParameterActionValue           = "reboot"
+	ParameterActionRebootValue     = "reboot"
+	parameterActionStatusValue     = "status"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
 )
 
@@ -90,11 +90,11 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 	}
 
 	// Build command with status action
-	command := []string{agent, "--action", "status"}
+	command := []string{agent, ParameterActionName, parameterActionStatusValue}
 
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
-		if string(paramName) != "action" && string(paramName) != "--action" {
+		if string(paramName) != actionName && string(paramName) != ParameterActionName {
 			command = append(command, fmt.Sprintf("--%s", string(paramName)), paramValue)
 		}
 	}
@@ -156,7 +156,7 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 
 // ValidateActionParameter validates that action parameters are set correctly
 func ValidateActionParameter(paramName, paramVal string) error {
-	if (paramName == actionName || paramName == ParameterActionName) && paramVal != "" && paramVal != ParameterActionValue {
+	if (paramName == actionName || paramName == ParameterActionName) && paramVal != "" && paramVal != ParameterActionRebootValue {
 		// --action parameter with a different value from reboot is not supported
 		err := fmt.Errorf("FAR doesn't support any other action than reboot")
 		loggerValidation.Error(err, "can't build CR with this action attribute", "action", paramVal)
@@ -167,7 +167,7 @@ func ValidateActionParameter(paramName, paramVal string) error {
 
 // isAgentFileExists returns true if the agent name matches a binary, and false otherwise
 func isAgentFileExists(agent string) (bool, error) {
-	directory := fenceAgentsDirectory
+	directory := "/usr/sbin/"
 	// Create the full path by joining the directory and filename
 	fullPath := filepath.Join(directory, agent)
 

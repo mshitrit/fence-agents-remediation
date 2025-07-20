@@ -33,7 +33,6 @@ var (
 	// webhookFARLog is for logging in this package.
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 	// verify agent existence with os.Stat function
-	//TODO mshitrit cancel the agent validator
 	agentValidator = validation.NewAgentValidator()
 	// isOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
 	isOutOfServiceTaintSupported bool

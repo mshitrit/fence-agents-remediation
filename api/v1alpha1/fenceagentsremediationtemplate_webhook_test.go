@@ -7,9 +7,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // mockClient for testing

@@ -417,7 +417,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
 	if _, exist := fenceAgentParams[validation.ParameterActionName]; !exist {
 		r.Log.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[validation.ParameterActionName] = validation.ParameterActionValue
+		fenceAgentParams[validation.ParameterActionName] = validation.ParameterActionRebootValue
 	}
 
 	return fenceAgentParams, false, nil

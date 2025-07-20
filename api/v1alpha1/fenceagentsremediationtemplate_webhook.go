@@ -18,8 +18,6 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
-
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,14 +72,42 @@ func (r *FenceAgentsRemediationTemplate) Default() {
 func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	r := obj.(*FenceAgentsRemediationTemplate)
 	webhookFARTemplateLog.Info("validate create", "name", r.Name)
-	return v.validateFARTemplate(ctx, r)
+
+	var allErrors []error
+	// First, run the existing FAR validation logic
+	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
+	if validateFarErr != nil {
+		allErrors = append(allErrors, validateFarErr)
+	}
+
+	// Perform enhanced parameter validation with secret collection
+	validateParamErr := v.validateFenceAgentParameters(ctx, r)
+	if validateParamErr != nil {
+		allErrors = append(allErrors, validateParamErr)
+	}
+
+	return validateWarnings, errors.NewAggregate(allErrors)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
 	r := new.(*FenceAgentsRemediationTemplate)
 	webhookFARTemplateLog.Info("validate update", "name", r.Name)
-	return v.validateFARTemplate(ctx, r)
+
+	var allErrors []error
+	// First, run the existing FAR validation logic
+	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
+	if validateFarErr != nil {
+		allErrors = append(allErrors, validateFarErr)
+	}
+
+	// Perform enhanced parameter validation with secret collection
+	validateParamErr := v.validateFenceAgentParameters(ctx, r)
+	if validateParamErr != nil {
+		allErrors = append(allErrors, validateParamErr)
+	}
+
+	return validateWarnings, errors.NewAggregate(allErrors)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -89,42 +115,6 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 	r := obj.(*FenceAgentsRemediationTemplate)
 	webhookFARTemplateLog.Info("validate delete", "name", r.Name)
 	return nil, nil
-}
-
-// validateFARTemplate performs comprehensive validation of the FenceAgentsRemediationTemplate
-func (v *customValidator) validateFARTemplate(ctx context.Context, r *FenceAgentsRemediationTemplate) (admission.Warnings, error) {
-	spec := &r.Spec.Template.Spec
-	var warnings []string
-
-	// First, run the existing FAR validation logic
-	basicWarnings, basicErr := validateFAR(spec)
-
-	// Convert basic warnings to string slice if any
-	if len(basicWarnings) > 0 {
-		for _, w := range basicWarnings {
-			warnings = append(warnings, string(w))
-		}
-	}
-	//TODO mshitrit simplify the validateFARTemplate > validateFenceAgentParameters > ValidateFenceAgentParams chain
-
-	// Perform enhanced parameter validation
-	paramValidationErrors := v.validateFenceAgentParameters(ctx, r)
-
-	// Combine validation errors
-	var allErrors []error
-	if basicErr != nil {
-		allErrors = append(allErrors, basicErr)
-	}
-	if paramValidationErrors != nil {
-		allErrors = append(allErrors, paramValidationErrors)
-	}
-
-	var aggregated error
-	if len(allErrors) > 0 {
-		aggregated = errors.NewAggregate(allErrors)
-	}
-
-	return warnings, aggregated
 }
 
 // validateFenceAgentParameters validates the fence agent parameters according to custom rules
@@ -197,13 +187,4 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 
 	_, err = parameterValidator.ValidateParametersWithStatus(spec.Agent, spec.SharedParameters)
 	return err
-}
-
-// convertValidationErrors converts string errors to proper error types
-func convertValidationErrors(errorStrings []string) []error {
-	var errors []error
-	for _, errStr := range errorStrings {
-		errors = append(errors, fmt.Errorf("%s", errStr))
-	}
-	return errors
 }
