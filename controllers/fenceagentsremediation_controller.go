@@ -46,14 +46,6 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
-const (
-	// errors
-	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	errorFailGettingSecret = "failed to get secret `%s` at namespace `%s`: %w"
-
-	SuccessFAResponse = "Success: Rebooted"
-)
-
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
@@ -121,13 +113,13 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
-	node, err := utils.GetNodeWithName(r.Client, getNodeName(far))
+	node, err := utils.GetNodeWithName(r.Client, v1alpha1.GetNodeName(far))
 	if err != nil {
 		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	if node == nil {
-		r.Log.Error(err, "Could not find CR's target node", "CR's Name", req.Name, "Expected node name", getNodeName(far))
+		r.Log.Error(err, "Could not find CR's target node", "CR's Name", req.Name, "Expected node name", v1alpha1.GetNodeName(far))
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
 		return emptyResult, err
@@ -227,7 +219,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		fenceAgentParams, isRetryRequired, err := r.buildFenceAgentParams(ctx, far)
+		fenceAgentParams, isRetryRequired, err := v1alpha1.BuildFenceAgentParams(ctx, r.Client, far)
 		if err != nil {
 			if !isRetryRequired {
 				return emptyResult, nil
@@ -335,92 +327,6 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 		return fmt.Errorf("failed to wait for updated cache to be updated in status update after %f seconds of timeout - %w", pollingTimeout.Seconds(), pollErr)
 	}
 	return nil
-}
-
-// getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
-func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
-	ann := far.GetAnnotations()
-	if ann == nil {
-		return far.GetName()
-	}
-	if nodeName, isNodeNameAnnotationExist := ann[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
-		return nodeName
-	}
-	return far.GetName()
-}
-
-// buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
-func (r *FenceAgentsRemediationReconciler) buildFenceAgentParamsMap(far *v1alpha1.FenceAgentsRemediation, secretParams map[string]string) (map[validation.ParameterName]string, error) {
-	nodeName := getNodeName(far)
-	fenceAgentParams := make(map[validation.ParameterName]string)
-
-	// Add shared parameters
-	for paramName, paramVal := range far.Spec.SharedParameters {
-		fenceAgentParams[paramName] = paramVal
-	}
-
-	// Add node parameters (these can override shared parameters)
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[validation.NodeName(nodeName)]; isFound {
-			if _, exist := fenceAgentParams[paramName]; exist {
-				r.Log.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
-			}
-			fenceAgentParams[paramName] = nodeVal
-		} else {
-			r.Log.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
-		}
-	}
-
-	// Add secret parameters
-	for secretKey, secretVal := range secretParams {
-		secretParam := validation.ParameterName(secretKey)
-		fenceAgentParams[secretParam] = secretVal
-	}
-
-	if len(fenceAgentParams) == 0 {
-		err := errors.New(errorMissingParams)
-		r.Log.Error(err, "Missing parameters")
-		return nil, err
-	}
-
-	return fenceAgentParams, nil
-}
-
-// buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[validation.ParameterName]string, bool, error) {
-	nodeName := getNodeName(far)
-	secretParams, err := validation.CollectRemediationSecretParams(
-		ctx,
-		r.Client,
-		far.Spec.SharedSecretName,
-		far.Spec.NodeSecretNames,
-		nodeName,
-		far.Namespace,
-	)
-	if err != nil {
-		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
-		return nil, true, err
-	}
-
-	// First validate all parameters
-	if err := validation.ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
-		return nil, false, err
-	}
-
-	// If validation passes, build the parameters map
-	fenceAgentParams, err := r.buildFenceAgentParamsMap(far, secretParams)
-	if err != nil {
-		return nil, true, err
-	}
-
-	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParams[validation.ParameterActionName]; !exist {
-		r.Log.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[validation.ParameterActionName] = validation.ParameterActionRebootValue
-	}
-
-	return fenceAgentParams, false, nil
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty

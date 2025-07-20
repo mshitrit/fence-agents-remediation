@@ -774,7 +774,7 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 	By("Searching for remediation taint if we have a finalizer")
 	Eventually(func(g Gomega) {
 		node := &corev1.Node{}
-		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: getNodeName(underTestFAR)}, node)).To(Succeed())
+		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: v1alpha1.GetNodeName(underTestFAR)}, node)).To(Succeed())
 		g.Expect(utils.TaintExists(node.Spec.Taints, taint)).To(BeTrue(), "remediation taint should exist")
 	}, timeoutPreRemediation, pollInterval).Should(Succeed())
 	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
