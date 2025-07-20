@@ -38,16 +38,16 @@ var (
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
 	// parameterValidator for validating fence agent parameters
 	parameterValidator = validation.NewFenceAgentParameterValidator()
-	// webhookClient for accessing Kubernetes resources during validation
-	webhookClient client.Client
 )
 
-func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	// Store the client for use in validation
-	webhookClient = mgr.GetClient()
+type customValidator struct {
+	client.Client
+}
 
+func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithValidator(&customValidator{mgr.GetClient()}).
 		Complete()
 }
 
@@ -68,31 +68,31 @@ func (r *FenceAgentsRemediationTemplate) Default() {
 	}
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
-
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	r := obj.(*FenceAgentsRemediationTemplate)
 	webhookFARTemplateLog.Info("validate create", "name", r.Name)
-	return r.validateFARTemplate()
+	return v.validateFARTemplate(ctx, r)
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
+	r := new.(*FenceAgentsRemediationTemplate)
 	webhookFARTemplateLog.Info("validate update", "name", r.Name)
-	return r.validateFARTemplate()
+	return v.validateFARTemplate(ctx, r)
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, error) {
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	r := obj.(*FenceAgentsRemediationTemplate)
 	webhookFARTemplateLog.Info("validate delete", "name", r.Name)
 	return nil, nil
 }
 
 // validateFARTemplate performs comprehensive validation of the FenceAgentsRemediationTemplate
-func (r *FenceAgentsRemediationTemplate) validateFARTemplate() (admission.Warnings, error) {
+func (v *customValidator) validateFARTemplate(ctx context.Context, r *FenceAgentsRemediationTemplate) (admission.Warnings, error) {
 	spec := &r.Spec.Template.Spec
 	var warnings []string
 
@@ -108,33 +108,38 @@ func (r *FenceAgentsRemediationTemplate) validateFARTemplate() (admission.Warnin
 	//TODO mshitrit simplify the validateFARTemplate > validateFenceAgentParameters > ValidateFenceAgentParams chain
 
 	// Perform enhanced parameter validation
-	paramValidationErrors := r.validateFenceAgentParameters()
+	paramValidationErrors := v.validateFenceAgentParameters(ctx, r)
 
 	// Combine validation errors
 	var allErrors []error
 	if basicErr != nil {
 		allErrors = append(allErrors, basicErr)
 	}
-	allErrors = append(allErrors, paramValidationErrors)
-	aggregated := errors.NewAggregate(allErrors)
+	if paramValidationErrors != nil {
+		allErrors = append(allErrors, paramValidationErrors)
+	}
+
+	var aggregated error
+	if len(allErrors) > 0 {
+		aggregated = errors.NewAggregate(allErrors)
+	}
 
 	return warnings, aggregated
 }
 
 // validateFenceAgentParameters validates the fence agent parameters according to custom rules
 // and optionally tests them with an actual status command
-func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
+func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) error {
 	spec := &r.Spec.Template.Spec
-	ctx := context.TODO()
 
 	// Collect shared secret parameters
 	var sharedSecretParams map[string]string
 	var err error
 
-	if spec.SharedSecretName != nil && webhookClient != nil {
+	if spec.SharedSecretName != nil {
 		sharedSecretParams, err = validation.CollectRemediationSecretParams(
 			ctx,
-			webhookClient,
+			v.Client,
 			spec.SharedSecretName,
 			spec.NodeSecretNames,
 			"", // empty node name for shared secrets only
@@ -167,10 +172,10 @@ func (r *FenceAgentsRemediationTemplate) validateFenceAgentParameters() error {
 			// Collect node-specific secret parameters
 			var nodeSecretParams map[string]string
 
-			if spec.NodeSecretNames != nil && webhookClient != nil {
+			if spec.NodeSecretNames != nil {
 				nodeSecretParams, err = validation.CollectRemediationSecretParams(
 					ctx,
-					webhookClient,
+					v.Client,
 					spec.SharedSecretName,
 					spec.NodeSecretNames,
 					nodeName,
