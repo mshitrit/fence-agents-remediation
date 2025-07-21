@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"errors"
+	"maps"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
@@ -127,6 +128,8 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 // validateFenceAgentParameters validates fence agent parameters for templates
 // by creating temporary FAR CRs and using BuildFenceAgentParams + ValidateParametersWithStatus
 func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) error {
+	webhookFARTemplateLog.Info("validateFenceAgentParameters start")
+
 	spec := &r.Spec.Template.Spec
 
 	// Check if template has any parameters at all
@@ -138,6 +141,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	// Templates are allowed to be empty - parameters can be added later
 	//TODO mshitrit should we allow this ?
 	if !hasSharedParams && !hasNodeParams && !hasSecrets {
+		webhookFARTemplateLog.Info("validateFenceAgentParameters return no params")
 		return nil
 	}
 
@@ -147,13 +151,15 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	skipStatusValidation := false
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
+		webhookFARTemplateLog.Info("validateFenceAgentParameters no nodes found")
 		nodeNames["temp-validation"] = true
 		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 		skipStatusValidation = true
 	}
-
+	webhookFARTemplateLog.Info("validateFenceAgentParameters nodes list", "nodes", maps.Keys(nodeNames))
 	// Validate parameters for each node mentioned in NodeParameters
 	for nodeName := range nodeNames {
+		webhookFARTemplateLog.Info("validateFenceAgentParameters starting to  validate node", "node", nodeName)
 		// Create a temporary FAR CR from the template for this specific node
 		tempFAR := &FenceAgentsRemediation{
 			ObjectMeta: metav1.ObjectMeta{
@@ -176,8 +182,9 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 				return err
 			}
 		}
-
+		webhookFARTemplateLog.Info("validateFenceAgentParameters node validated", "node", nodeName)
 	}
+	webhookFARTemplateLog.Info("validateFenceAgentParameters all nodes validated")
 	return nil
 }
 
