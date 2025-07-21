@@ -315,6 +315,7 @@ func CollectRemediationSecretParams(
 	nodeName string,
 	namespace string,
 ) (map[string]string, error) {
+	loggerValidation.Info("CollectRemediationSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
 	var err error
 
@@ -336,6 +337,7 @@ func CollectRemediationSecretParams(
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
 		maps.Copy(secretParams, nodeSecretParams)
 	}
+	loggerValidation.Info("CollectRemediationSecretParams finish successfully for node", "node", nodeName)
 	return secretParams, nil
 }
 

@@ -253,6 +253,8 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 // BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[validation.ParameterName]string, bool, error) {
+	webhookFARTemplateLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
+
 	nodeName := GetNodeName(far)
 	secretParams, err := validation.CollectRemediationSecretParams(
 		ctx,
@@ -284,5 +286,6 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 		fenceAgentParams[validation.ParameterActionName] = validation.ParameterActionRebootValue
 	}
 
+	webhookFARTemplateLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
 	return fenceAgentParams, false, nil
 }
