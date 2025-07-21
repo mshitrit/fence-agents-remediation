@@ -141,22 +141,14 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 		return nil
 	}
 
-	//TODO mshitrit also collect node names from node secrets
-
-	// Collect all unique node names from NodeParameters
-	nodeNames := make(map[string]bool)
-	for _, nodeMap := range spec.NodeParameters {
-		for nodeName := range nodeMap {
-			nodeNames[string(nodeName)] = true
-		}
-	}
-	//TODO mshitrit think about how we handle template node for this use case, potentially need to query for all the nodes from the API Server or consed as a limitation
+	// Collect all unique node names from NodeParameters and NodeSecretNames
+	nodeNames := getNodeNamesFromSpec(spec)
 
 	skipStatusValidation := false
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
 		nodeNames["temp-validation"] = true
-		// No nodes to run status check on
+		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 		skipStatusValidation = true
 	}
 
@@ -189,6 +181,20 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	return nil
 }
 
+// TODO mshitrit export some of the logic to a different file
+func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) map[string]bool {
+	nodeNames := make(map[string]bool)
+	for _, nodeMap := range spec.NodeParameters {
+		for nodeName := range nodeMap {
+			nodeNames[string(nodeName)] = true
+		}
+	}
+	for nodeName, _ := range spec.NodeSecretNames {
+		nodeNames[string(nodeName)] = true
+	}
+	return nodeNames
+}
+
 // GetNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func GetNodeName(far *FenceAgentsRemediation) string {
 	ann := far.GetAnnotations()
@@ -202,7 +208,7 @@ func GetNodeName(far *FenceAgentsRemediation) string {
 }
 
 // buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
-func buildFenceAgentParamsMap(k8sClient client.Client, far *FenceAgentsRemediation, secretParams map[string]string) (map[validation.ParameterName]string, error) {
+func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[string]string) (map[validation.ParameterName]string, error) {
 	nodeName := GetNodeName(far)
 	fenceAgentParams := make(map[validation.ParameterName]string)
 
@@ -261,7 +267,7 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	}
 
 	// If validation passes, build the parameters map
-	fenceAgentParams, err := buildFenceAgentParamsMap(k8sClient, far, secretParams)
+	fenceAgentParams, err := buildFenceAgentParamsMap(far, secretParams)
 	if err != nil {
 		return nil, true, err
 	}
