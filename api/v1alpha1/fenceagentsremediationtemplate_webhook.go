@@ -22,6 +22,7 @@ import (
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilErrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,6 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
+)
+
+const (
+	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 )
 
 var (
@@ -119,31 +124,24 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 	return nil, nil
 }
 
-// validateFenceAgentParameters validates the fence agent parameters according to custom rules
-// and optionally tests them with an actual status command
+// validateFenceAgentParameters validates fence agent parameters for templates
+// by creating temporary FAR CRs and using BuildFenceAgentParams + ValidateParametersWithStatus
 func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) error {
 	spec := &r.Spec.Template.Spec
 
-	// Collect shared secret parameters
-	var sharedSecretParams map[string]string
-	var err error
+	// Check if template has any parameters at all
+	hasSharedParams := len(spec.SharedParameters) > 0
+	hasNodeParams := len(spec.NodeParameters) > 0
+	hasSecrets := spec.SharedSecretName != nil || spec.NodeSecretNames != nil
 
-	if spec.SharedSecretName != nil {
-		sharedSecretParams, err = validation.CollectRemediationSecretParams(
-			ctx,
-			v.Client,
-			spec.SharedSecretName,
-			spec.NodeSecretNames,
-			"", // empty node name for shared secrets only
-			r.Namespace,
-		)
-		if err != nil {
-			webhookFARTemplateLog.Info("Failed to collect shared secret params, using empty params", "error", err)
-			sharedSecretParams = make(map[string]string)
-		}
-	} else {
-		sharedSecretParams = make(map[string]string)
+	// If template has no parameters or secrets, skip parameter validation
+	// Templates are allowed to be empty - parameters can be added later
+	//TODO mshitrit should we allow this ?
+	if !hasSharedParams && !hasNodeParams && !hasSecrets {
+		return nil
 	}
+
+	//TODO mshitrit also collect node names from node secrets
 
 	// Collect all unique node names from NodeParameters
 	nodeNames := make(map[string]bool)
@@ -152,48 +150,44 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 			nodeNames[string(nodeName)] = true
 		}
 	}
+	//TODO mshitrit think about how we handle template node for this use case, potentially need to query for all the nodes from the API Server or consed as a limitation
 
-	// If no node-specific parameters, validate with empty node name (for shared parameters only)
+	skipStatusValidation := false
+	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
-		if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, sharedSecretParams, ""); err != nil {
+		nodeNames["temp-validation"] = true
+		// No nodes to run status check on
+		skipStatusValidation = true
+	}
+
+	// Validate parameters for each node mentioned in NodeParameters
+	for nodeName := range nodeNames {
+		// Create a temporary FAR CR from the template for this specific node
+		tempFAR := &FenceAgentsRemediation{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      nodeName,
+				Namespace: r.Namespace,
+			},
+			Spec: *spec,
+		}
+
+		// BuildFenceAgentParams handles secret collection and validation internally
+		completeParams, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
+		if err != nil {
+			// If BuildFenceAgentParams fails, return the validation error
 			return err
 		}
-	} else {
-		// Validate parameters for each node mentioned in NodeParameters
-		for nodeName := range nodeNames {
-			// Collect node-specific secret parameters
-			var nodeSecretParams map[string]string
 
-			if spec.NodeSecretNames != nil {
-				nodeSecretParams, err = validation.CollectRemediationSecretParams(
-					ctx,
-					v.Client,
-					spec.SharedSecretName,
-					spec.NodeSecretNames,
-					nodeName,
-					r.Namespace,
-				)
-				if err != nil {
-					webhookFARTemplateLog.Info("Failed to collect secret params for node, using empty params", "node", nodeName, "error", err)
-					nodeSecretParams = make(map[string]string)
-				}
-			} else {
-				nodeSecretParams = make(map[string]string)
-			}
-
-			if err := validation.ValidateFenceAgentParams(spec.SharedParameters, spec.NodeParameters, nodeSecretParams, nodeName); err != nil {
+		if !skipStatusValidation {
+			// Validate the complete parameter set with status command
+			if _, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, completeParams); err != nil {
 				return err
 			}
 		}
-	}
-	//TODO mshitrit shared params isn't enough
-	_, err = parameterValidator.ValidateParametersWithStatus(spec.Agent, spec.SharedParameters)
-	return err
-}
 
-const (
-	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-)
+	}
+	return nil
+}
 
 // GetNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func GetNodeName(far *FenceAgentsRemediation) string {
