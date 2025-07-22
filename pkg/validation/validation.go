@@ -83,11 +83,6 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 		Warnings: []string{},
 	}
 
-	//TODO mshitrit undo this
-	if true {
-		return result, nil
-	}
-
 	if agent == "" {
 		result.IsValid = false
 		result.Errors = append(result.Errors, "empty agent name")
