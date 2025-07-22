@@ -95,7 +95,7 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
 		if string(paramName) != actionName && string(paramName) != ParameterActionName {
-			command = append(command, fmt.Sprintf("--%s", string(paramName)), paramValue)
+			command = append(command, string(paramName), paramValue)
 		}
 	}
 
