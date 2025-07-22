@@ -118,6 +118,7 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("status command timed out after %v", v.timeout))
+			loggerValidation.Info("ValidateParametersWithStatus status command timed out", "result", result)
 			return result, nil
 		}
 
@@ -146,7 +147,7 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 			// Connectivity or other runtime errors (warnings only)
 			result.Warnings = append(result.Warnings, fmt.Sprintf("fence agent connectivity test failed (this may be expected): %v", err))
 		}
-
+		loggerValidation.Info("ValidateParametersWithStatus status command failed", "result", result)
 		return result, nil
 	}
 
