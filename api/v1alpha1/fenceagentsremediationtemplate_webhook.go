@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	"context"
 	"errors"
-	"maps"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
@@ -156,7 +155,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 		skipStatusValidation = true
 	}
-	webhookFARTemplateLog.Info("validateFenceAgentParameters nodes list", "nodes", maps.Keys(nodeNames))
+	webhookFARTemplateLog.Info("validateFenceAgentParameters nodes list", "nodes", nodeNames)
 	// Validate parameters for each node mentioned in NodeParameters
 	for nodeName := range nodeNames {
 		webhookFARTemplateLog.Info("validateFenceAgentParameters starting to  validate node", "node", nodeName)
