@@ -42,7 +42,6 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	"github.com/medik8s/fence-agents-remediation/pkg/template"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
@@ -339,17 +338,4 @@ func appendParamToSlice(fenceAgentParams []string, paramName validation.Paramete
 		fenceAgentParams = append(fenceAgentParams, stringParam)
 	}
 	return fenceAgentParams
-}
-
-func (r *FenceAgentsRemediationReconciler) processSecretParams(secretParams map[string]string, secretName, nodeName string) (map[string]string, error) {
-	processedSecretParams := map[string]string{}
-	for key, val := range secretParams {
-		processedParamVal, err := template.RenderParameterTemplate(val, nodeName)
-		if err != nil {
-			r.Log.Error(err, "Failed to process parameter value stored in secret", "param key", key, "secret name", secretName)
-			return nil, err
-		}
-		processedSecretParams[key] = processedParamVal
-	}
-	return processedSecretParams, nil
 }

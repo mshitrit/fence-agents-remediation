@@ -326,7 +326,8 @@ func CollectRemediationSecretParams(
 }
 
 // collectSecretParams reads and adds the secret params if they are available
-// For both shared and node secrets, IsNotFound errors are ignored (returns empty map)
+// For shared secrets, IsNotFound errors are ignored (returns empty map)
+// For node secrets, IsNotFound errors are returned as errors
 func collectSecretParams(
 	ctx context.Context,
 	k8sClient client.Client,
