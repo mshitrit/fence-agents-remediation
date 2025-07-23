@@ -33,7 +33,7 @@ const (
 	minK8sMinorVersionOutOfServiceTaint = 26
 
 	// Parameter validation constants //TODO mshitrit looks like this timeout is too long webhook times out before timeout is reached - look into what's the default webhook timeout
-	parameterValidationTimeout = 30 * time.Second
+	parameterValidationTimeout = 29 * time.Second
 
 	ParameterActionName            = "--" + actionName
 	actionName                     = "action"
