@@ -140,8 +140,6 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 // validateFenceAgentParameters validates fence agent parameters for templates
 // by creating temporary FAR CRs and using BuildFenceAgentParams + ValidateParametersWithStatus
 func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) ([]string, error) {
-	webhookFARTemplateLog.Info("validateFenceAgentParameters start")
-
 	var warnings []string
 	spec := &r.Spec.Template.Spec
 
@@ -169,10 +167,8 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 		skipStatusValidation = true
 	}
-	webhookFARTemplateLog.Info("validateFenceAgentParameters nodes list", "nodes", nodeNames)
 	// Validate parameters for each node mentioned in NodeParameters
 	for nodeName := range nodeNames {
-		webhookFARTemplateLog.Info("validateFenceAgentParameters starting to  validate node", "node", nodeName)
 		// Create a temporary FAR CR from the template for this specific node
 		tempFAR := &FenceAgentsRemediation{
 			ObjectMeta: metav1.ObjectMeta{
@@ -202,9 +198,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 				webhookFARTemplateLog.Info("validateFenceAgentParameters warning", "node", nodeName, "warning", warning)
 			}
 		}
-		webhookFARTemplateLog.Info("validateFenceAgentParameters node validated", "node", nodeName)
 	}
-	webhookFARTemplateLog.Info("validateFenceAgentParameters all nodes validated")
 	return warnings, nil
 }
 
