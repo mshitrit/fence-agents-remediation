@@ -32,7 +32,7 @@ const (
 	minK8sMajorVersionOutOfServiceTaint = 1
 	minK8sMinorVersionOutOfServiceTaint = 26
 
-	// Parameter validation constants
+	// Parameter validation constants //TODO mshitrit looks like this timeout is too long webhook times out before timeout is reached - look into what's the default webhook timeout
 	parameterValidationTimeout = 30 * time.Second
 
 	ParameterActionName            = "--" + actionName
@@ -76,17 +76,11 @@ func NewFenceAgentParameterValidator() *FenceAgentParameterValidator {
 
 // ValidateParametersWithStatus validates fence agent parameters by running a status command
 func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[ParameterName]string) (*ParameterValidationResult, error) {
-	//TODO mshitrit make sure this returns only error
+	//TODO mshitrit better analyze the result
 	result := &ParameterValidationResult{
 		IsValid:  true,
 		Errors:   []string{},
 		Warnings: []string{},
-	}
-
-	if agent == "" {
-		result.IsValid = false
-		result.Errors = append(result.Errors, "empty agent name")
-		return result, nil
 	}
 
 	// Build command with status action
