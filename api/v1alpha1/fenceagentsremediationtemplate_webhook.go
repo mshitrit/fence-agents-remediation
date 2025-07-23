@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
@@ -177,8 +178,9 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 
 		if !skipStatusValidation {
 			// Validate the complete parameter set with status command
-			if _, err := parameterValidator.ValidateParametersWithStatus(spec.Agent, completeParams); err != nil {
-				return err
+			result := parameterValidator.ValidateParametersWithStatus(spec.Agent, completeParams)
+			if !result.IsSuccessful {
+				return fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
 			}
 		}
 		webhookFARTemplateLog.Info("validateFenceAgentParameters node validated", "node", nodeName)

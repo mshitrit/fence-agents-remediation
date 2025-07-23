@@ -56,10 +56,8 @@ type validateAgentExistence struct {
 
 // ParameterValidationResult contains the results of parameter validation
 type ParameterValidationResult struct {
-	IsValid      bool
-	Errors       []string
-	Warnings     []string
-	StatusOutput string
+	IsSuccessful bool
+	Message      string
 }
 
 // FenceAgentParameterValidator validates fence agent parameters
@@ -75,12 +73,10 @@ func NewFenceAgentParameterValidator() *FenceAgentParameterValidator {
 }
 
 // ValidateParametersWithStatus validates fence agent parameters by running a status command
-func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[ParameterName]string) (*ParameterValidationResult, error) {
-	//TODO mshitrit better analyze the result
+func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string, parameters map[ParameterName]string) *ParameterValidationResult {
 	result := &ParameterValidationResult{
-		IsValid:  true,
-		Errors:   []string{},
-		Warnings: []string{},
+		IsSuccessful: true,
+		Message:      "",
 	}
 
 	// Build command with status action
@@ -107,46 +103,29 @@ func (v *FenceAgentParameterValidator) ValidateParametersWithStatus(agent string
 	err := cmd.Run()
 	stdout := outBuilder.String()
 	stderr := errBuilder.String()
-	result.StatusOutput = stdout
 
 	if err != nil {
+		result.IsSuccessful = false
 		if ctx.Err() == context.DeadlineExceeded {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("status command timed out after %v", v.timeout))
+			result.Message = fmt.Sprintf("status command timed out after %v", v.timeout)
 			loggerValidation.Info("ValidateParametersWithStatus status command timed out", "result", result)
-			return result, nil
+			return result
 		}
 
-		// Check if it's a parameter-related error vs connectivity error
-		stderrLower := strings.ToLower(stderr)
-		stdoutLower := strings.ToLower(stdout)
-
-		// Parameter validation errors (hard failures)
-		parameterErrors := []string{
-			"unrecognized", "invalid", "unknown option", "unknown argument",
-			"required argument", "missing argument", "bad parameter",
-		}
-
-		isParameterError := false
-		for _, errPattern := range parameterErrors {
-			if strings.Contains(stderrLower, errPattern) || strings.Contains(stdoutLower, errPattern) {
-				isParameterError = true
-				break
-			}
-		}
-
-		if isParameterError {
-			result.IsValid = false
-			result.Errors = append(result.Errors, fmt.Sprintf("fence agent parameter validation failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout))
-		} else {
-			// Connectivity or other runtime errors (warnings only)
-			result.Warnings = append(result.Warnings, fmt.Sprintf("fence agent connectivity test failed (this may be expected): %v", err))
-		}
+		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout)
 		loggerValidation.Info("ValidateParametersWithStatus status command failed", "result", result)
-		return result, nil
+		return result
 	}
 
-	loggerValidation.Info("Fence agent status command succeeded", "agent", agent, "stdout", stdout)
-	return result, nil
+	// Command completed successfully, now check if stdout contains "Status: ON"
+	if strings.Contains(stdout, "Status: ON") {
+		loggerValidation.Info("Fence agent status command succeeded with Status: ON", "agent", agent, "stdout", stdout)
+	} else {
+		result.Message = fmt.Sprintf("fence agent command completed but status is not ON (stdout: %s, stderr: %s)", stdout, stderr)
+		loggerValidation.Info("Fence agent status command completed but status not ON", "agent", agent, "stdout", stdout, "stderr", stderr)
+	}
+
+	return result
 }
 
 // ValidateActionParameter validates that action parameters are set correctly
