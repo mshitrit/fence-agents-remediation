@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/medik8s/fence-agents-remediation/pkg/template"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
@@ -202,7 +203,6 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	return warnings, nil
 }
 
-// TODO mshitrit export some of the logic to a different file
 func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) map[string]bool {
 	nodeNames := make(map[string]bool)
 	for _, nodeMap := range spec.NodeParameters {
@@ -235,7 +235,12 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 
 	// Add shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
-		fenceAgentParams[paramName] = paramVal
+		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
+		if err != nil {
+			webhookFARTemplateLog.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
+			return fenceAgentParams, err
+		}
+		fenceAgentParams[paramName] = processedParamVal
 	}
 
 	// Add node parameters (these can override shared parameters)
@@ -264,6 +269,8 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 
 	return fenceAgentParams, nil
 }
+
+//TODO mshitrit move this method and logic to a new file/pkg
 
 // BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error

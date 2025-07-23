@@ -245,7 +245,43 @@ spec:
 
 If a parameter is defined in both a Secret and in the `sharedparameters` or `nodeparameters` fields of the CR, a **validation error will occur** to prevent ambiguity.
 
-Here is an example for a Secret
+#### NodeName Template Support:
+
+Both `sharedparameters` and **shared Secret parameters** support Go template syntax for dynamic node name substitution:
+
+* Use `{{.NodeName}}` in parameter values to substitute the actual node name at runtime.
+* Templates are processed for both shared parameters and shared/node secret parameters.
+* Invalid template syntax will prevent fence agent execution and log appropriate error messages.
+
+**Examples:**
+
+For shared parameters:
+```yaml
+spec:
+  sharedparameters:
+    --systems-uri: "/redfish/v1/Systems/{{.NodeName}}"
+    --hostname: "{{.NodeName}}.example.com"
+```
+
+For shared secrets:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fence-agents-credentials-shared
+  namespace: openshift-workload-availability
+type: Opaque
+data:
+  --systems-uri: L3JlZGZpc2gvdjEvU3lzdGVtcy97ey5Ob2RlTmFtZX19  # "/redfish/v1/Systems/{{.NodeName}}" base64 encoded
+  --hostname: e3suTm9kZU5hbWV9fS5leGFtcGxlLmNvbQ==  # "{{.NodeName}}.example.com" base64 encoded
+  --password: eXl5eQ==  # "yyyy" base64 encoded
+```
+
+When a FenceAgentsRemediation is processed for node `worker-1`, the templates will be resolved to:
+- `--systems-uri=/redfish/v1/Systems/worker-1`
+- `--hostname=worker-1.example.com`
+
+Here is an example for a Secret without templates:
 ```yaml
 apiVersion: v1
 kind: Secret

@@ -36,6 +36,24 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			})
 		})
 
+		When("template has only shared parameters and no node parameters", func() {
+			It("should be accepted", func() {
+				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate.Spec.Template.Spec.SharedParameters = map[validation.ParameterName]string{
+					"ip":       "192.168.1.100",
+					"username": "admin",
+					"password": "secret",
+				}
+				// Explicitly ensure no node parameters
+				farTemplate.Spec.Template.Spec.NodeParameters = nil
+
+				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				Expect(err).NotTo(HaveOccurred())
+				// No warnings expected about node-specific parameters since there are none
+				Expect(warnings).To(BeEmpty())
+			})
+		})
+
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
@@ -162,6 +180,69 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
 			})
+		})
+	})
+
+	Context("validating template syntax", func() {
+		It("should aggregate multiple template validation errors", func() {
+			// Create a template with multiple invalid template strings
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							SharedParameters: map[validation.ParameterName]string{
+								"--systems-uri": "/redfish/v1/Systems/{{.NodeName", // Missing closing brace
+								"--hostname":    "{{.InvalidField}}",               // Unsupported name, only NodeName is supported
+								"--port":        "{{.NodeName}}.com",               // Valid template
+								"--invalid":     "/path/{{.NodeName",               // Another missing closing brace
+							},
+						},
+					},
+				},
+			}
+
+			// Validate and expect aggregated errors
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+
+			// Check that the error message contains information about multiple failures
+			errorMsg := err.Error()
+			Expect(errorMsg).To(ContainSubstring("--systems-uri"))
+			Expect(errorMsg).To(ContainSubstring("--hostname"))
+			Expect(errorMsg).To(ContainSubstring("--invalid"))
+			// The valid parameter should not appear in error message
+			Expect(errorMsg).ToNot(ContainSubstring("--port"))
+		})
+
+		It("should succeed when all templates are valid", func() {
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "valid-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							SharedParameters: map[validation.ParameterName]string{
+								"--systems-uri": "/redfish/v1/Systems/{{.NodeName}}",
+								"--hostname":    "{{.NodeName}}.example.com",
+								"--port":        "623", // No template, should be fine
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
 		})
 	})
 })

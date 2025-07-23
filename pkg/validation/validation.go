@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/medik8s/fence-agents-remediation/pkg/template"
 )
 
 var (
@@ -286,15 +288,28 @@ func CollectRemediationSecretParams(
 ) (map[string]string, error) {
 	loggerValidation.Info("CollectRemediationSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
+	var sharedSecretParams map[string]string
 	var err error
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
-		secretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
+		sharedSecretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
 		if err != nil {
 			return nil, err
 		}
+
 	}
+
+	// Templating secret shared parameters
+	for paramName, paramVal := range sharedSecretParams {
+		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
+		if err != nil {
+			loggerValidation.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
+			return secretParams, err
+		}
+		secretParams[paramName] = processedParamVal
+	}
+
 	// collect secret params from the node's secret
 	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
 	var nodeSecretParams map[string]string
@@ -311,8 +326,7 @@ func CollectRemediationSecretParams(
 }
 
 // collectSecretParams reads and adds the secret params if they are available
-// For shared secrets, IsNotFound errors are ignored (returns empty map)
-// For node secrets, IsNotFound errors are returned as errors
+// For both shared and node secrets, IsNotFound errors are ignored (returns empty map)
 func collectSecretParams(
 	ctx context.Context,
 	k8sClient client.Client,
@@ -331,11 +345,11 @@ func collectSecretParams(
 				// For shared secrets, IsNotFound is OK - return empty params
 				loggerValidation.Info("shared secret not found, continuing with empty params", "secret name", secretName, "namespace", namespace)
 				return secretParams, nil
-			} else {
-				// For node secrets, IsNotFound is an error
-				loggerValidation.Error(err, "node secret not found", "secret name", secretName, "namespace", namespace)
-				return nil, fmt.Errorf("node secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
 			}
+			// For node secrets, IsNotFound is an error
+			loggerValidation.Error(err, "node secret not found", "secret name", secretName, "namespace", namespace)
+			return nil, fmt.Errorf("node secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
+
 		}
 		// For any other error, always return it
 		loggerValidation.Error(err, "failed to get secret", "secret name", secretName, "namespace", namespace)

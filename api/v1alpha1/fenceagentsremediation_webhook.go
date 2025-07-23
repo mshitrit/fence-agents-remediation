@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/medik8s/fence-agents-remediation/pkg/template"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
@@ -73,6 +74,7 @@ func validateFAR(farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error
 	aggregated := errors.NewAggregate([]error{
 		validateAgentName(farSpec.Agent),
 		validateStrategy(farSpec.RemediationStrategy),
+		validateTemplateParameters(farSpec),
 	})
 
 	return admission.Warnings{}, aggregated
@@ -101,4 +103,18 @@ func validateStrategy(farRemStrategy RemediationStrategyType) error {
 		return fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
 	return nil
+}
+
+// validateTemplateParameters validates template syntax in shared parameters and collects all errors
+func validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
+	var validationErrors []error
+
+	// Validate template syntax in shared parameters
+	for paramName, paramValue := range spec.SharedParameters {
+		if _, err := template.RenderParameterTemplate(paramValue, "dummy-node-name"); err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid template syntax in shared parameter %s: %w", paramName, err))
+		}
+	}
+
+	return errors.NewAggregate(validationErrors)
 }
