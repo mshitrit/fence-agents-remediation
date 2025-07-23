@@ -82,19 +82,25 @@ func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object
 	webhookFARTemplateLog.Info("validate create", "name", r.Name)
 
 	var allErrors []error
+	var allWarnings []string
+
 	// First, run the existing FAR validation logic
 	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
 	if validateFarErr != nil {
 		allErrors = append(allErrors, validateFarErr)
 	}
+	// Add validateFAR warnings
+	allWarnings = append(allWarnings, validateWarnings...)
 
 	// Perform enhanced parameter validation with secret collection
-	validateParamErr := v.validateFenceAgentParameters(ctx, r)
+	paramWarnings, validateParamErr := v.validateFenceAgentParameters(ctx, r)
 	if validateParamErr != nil {
 		allErrors = append(allErrors, validateParamErr)
 	}
+	// Add parameter validation warnings
+	allWarnings = append(allWarnings, paramWarnings...)
 
-	return validateWarnings, utilErrors.NewAggregate(allErrors)
+	return allWarnings, utilErrors.NewAggregate(allErrors)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
@@ -103,19 +109,25 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 	webhookFARTemplateLog.Info("validate update", "name", r.Name)
 
 	var allErrors []error
+	var allWarnings []string
+
 	// First, run the existing FAR validation logic
 	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
 	if validateFarErr != nil {
 		allErrors = append(allErrors, validateFarErr)
 	}
+	// Add validateFAR warnings
+	allWarnings = append(allWarnings, validateWarnings...)
 
 	// Perform enhanced parameter validation with secret collection
-	validateParamErr := v.validateFenceAgentParameters(ctx, r)
+	paramWarnings, validateParamErr := v.validateFenceAgentParameters(ctx, r)
 	if validateParamErr != nil {
 		allErrors = append(allErrors, validateParamErr)
 	}
+	// Add parameter validation warnings
+	allWarnings = append(allWarnings, paramWarnings...)
 
-	return validateWarnings, utilErrors.NewAggregate(allErrors)
+	return allWarnings, utilErrors.NewAggregate(allErrors)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -127,9 +139,10 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 
 // validateFenceAgentParameters validates fence agent parameters for templates
 // by creating temporary FAR CRs and using BuildFenceAgentParams + ValidateParametersWithStatus
-func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) error {
+func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) ([]string, error) {
 	webhookFARTemplateLog.Info("validateFenceAgentParameters start")
 
+	var warnings []string
 	spec := &r.Spec.Template.Spec
 
 	// Check if template has any parameters at all
@@ -142,7 +155,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	//TODO mshitrit should we allow this ?
 	if !hasSharedParams && !hasNodeParams && !hasSecrets {
 		webhookFARTemplateLog.Info("validateFenceAgentParameters return no params")
-		return nil
+		return warnings, nil
 	}
 
 	// Collect all unique node names from NodeParameters and NodeSecretNames
@@ -173,20 +186,26 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 		completeParams, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
 		if err != nil {
 			// If BuildFenceAgentParams fails, return the validation error
-			return err
+			return warnings, err
 		}
 
 		if !skipStatusValidation {
 			// Validate the complete parameter set with status command
 			result := parameterValidator.ValidateParametersWithStatus(spec.Agent, completeParams)
 			if !result.IsSuccessful {
-				return fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
+				return warnings, fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
+			}
+			// Check if successful but has a warning message
+			if result.IsSuccessful && result.Message != "" {
+				warning := fmt.Sprintf("fence agent parameter validation succeeded with warning for node %s: %s", nodeName, result.Message)
+				warnings = append(warnings, warning)
+				webhookFARTemplateLog.Info("validateFenceAgentParameters warning", "node", nodeName, "warning", warning)
 			}
 		}
 		webhookFARTemplateLog.Info("validateFenceAgentParameters node validated", "node", nodeName)
 	}
 	webhookFARTemplateLog.Info("validateFenceAgentParameters all nodes validated")
-	return nil
+	return warnings, nil
 }
 
 // TODO mshitrit export some of the logic to a different file
