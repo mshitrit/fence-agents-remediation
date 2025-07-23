@@ -32,8 +32,8 @@ const (
 	minK8sMajorVersionOutOfServiceTaint = 1
 	minK8sMinorVersionOutOfServiceTaint = 26
 
-	// Parameter validation constants //TODO mshitrit looks like this timeout is too long webhook times out before timeout is reached - look into what's the default webhook timeout
-	parameterValidationTimeout = 29 * time.Second
+	// Parameter validation constants shouldn't exceed 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
+	parameterValidationTimeout = 3 * time.Second
 
 	ParameterActionName            = "--" + actionName
 	actionName                     = "action"

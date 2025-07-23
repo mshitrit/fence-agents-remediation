@@ -70,4 +70,4 @@ webhooks:
     resources:
     - fenceagentsremediationtemplates
   sideEffects: None
-  timeoutSeconds: 30
+  timeoutSeconds: 13
