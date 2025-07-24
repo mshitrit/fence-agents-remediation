@@ -67,7 +67,7 @@ func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object
 	allWarnings = append(allWarnings, validateWarnings...)
 
 	// Perform enhanced parameter validation with secret collection
-	paramWarnings, validateParamErr := v.validateFenceAgentParameters(ctx, r)
+	paramWarnings, validateParamErr := v.validateFenceAgentTemplate(ctx, r)
 	if validateParamErr != nil {
 		allErrors = append(allErrors, validateParamErr)
 	}
@@ -94,7 +94,7 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 	allWarnings = append(allWarnings, validateWarnings...)
 
 	// Perform enhanced parameter validation with secret collection
-	paramWarnings, validateParamErr := v.validateFenceAgentParameters(ctx, r)
+	paramWarnings, validateParamErr := v.validateFenceAgentTemplate(ctx, r)
 	if validateParamErr != nil {
 		allErrors = append(allErrors, validateParamErr)
 	}
@@ -111,9 +111,9 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 	return nil, nil
 }
 
-// validateFenceAgentParameters validates fence agent parameters for templates
-// by creating temporary FAR CRs and using BuildFenceAgentParams + ValidateParametersWithStatus
-func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *FenceAgentsRemediationTemplate) ([]string, error) {
+// validateFenceAgentTemplate validates fence agent parameters for templates
+// by creating temporary FAR CRs and using BuildFenceAgentParams + validateParametersWithStatus
+func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *FenceAgentsRemediationTemplate) ([]string, error) {
 	var warnings []string
 	spec := &r.Spec.Template.Spec
 
@@ -126,7 +126,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	// Templates are allowed to be empty - parameters can be added later
 	//TODO mshitrit should we allow this ?
 	if !hasSharedParams && !hasNodeParams && !hasSecrets {
-		webhookTemplateValidatorLog.Info("validateFenceAgentParameters return no params")
+		webhookTemplateValidatorLog.Info("validateFenceAgentTemplate return no params")
 		return warnings, nil
 	}
 
@@ -136,7 +136,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 	skipStatusValidation := false
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
-		webhookTemplateValidatorLog.Info("validateFenceAgentParameters no nodes found")
+		webhookTemplateValidatorLog.Info("validateFenceAgentTemplate no nodes found")
 		nodeNames["temp-validation"] = true
 		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 		skipStatusValidation = true
@@ -161,7 +161,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 
 		if !skipStatusValidation {
 			// Validate the complete parameter set with status command
-			result := ValidateParametersWithStatus(spec.Agent, completeParams)
+			result := validateParametersWithStatus(spec.Agent, completeParams)
 			if !result.IsSuccessful {
 				return warnings, fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
 			}
@@ -169,7 +169,7 @@ func (v *customValidator) validateFenceAgentParameters(ctx context.Context, r *F
 			if result.IsSuccessful && result.Message != "" {
 				warning := fmt.Sprintf("fence agent parameter validation succeeded with warning for node %s: %s", nodeName, result.Message)
 				warnings = append(warnings, warning)
-				webhookTemplateValidatorLog.Info("validateFenceAgentParameters warning", "node", nodeName, "warning", warning)
+				webhookTemplateValidatorLog.Info("validateFenceAgentTemplate warning", "node", nodeName, "warning", warning)
 			}
 		}
 	}
@@ -189,8 +189,8 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) map[string]bool {
 	return nodeNames
 }
 
-// ValidateFenceAgentParams validates all fence agent parameters without building the map
-func ValidateFenceAgentParams(
+// validateFenceAgentParams validates all fence agent parameters without building the map
+func validateFenceAgentParams(
 	sharedParameters map[ParameterName]string,
 	nodeParameters map[ParameterName]map[NodeName]string,
 	secretParams map[string]string,
@@ -202,7 +202,7 @@ func ValidateFenceAgentParams(
 	// Validate shared parameters
 	for paramName, paramVal := range sharedParameters {
 		// Verify action must be reboot
-		if err := ValidateActionParameter(string(paramName), paramVal); err != nil {
+		if err := validateActionParameter(string(paramName), paramVal); err != nil {
 			return err
 		}
 		// Verify param isn't already defined
@@ -218,7 +218,7 @@ func ValidateFenceAgentParams(
 	for paramName, nodeMap := range nodeParameters {
 		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
 			// Verify action must be reboot
-			if err := ValidateActionParameter(string(paramName), nodeVal); err != nil {
+			if err := validateActionParameter(string(paramName), nodeVal); err != nil {
 				return err
 			}
 			// For node params we don't enforce uniqueness as node param value will override shared param
@@ -226,12 +226,11 @@ func ValidateFenceAgentParams(
 		}
 	}
 
-	//TODO mshitrit merge template validation logic here
 	// Validate secret parameters
 	for secretKey, secretVal := range secretParams {
 		secretParam := ParameterName(secretKey)
 		// Verify action must be reboot
-		if err := ValidateActionParameter(string(secretParam), secretVal); err != nil {
+		if err := validateActionParameter(string(secretParam), secretVal); err != nil {
 			return err
 		}
 		if existingParams[secretParam] {
@@ -245,19 +244,19 @@ func ValidateFenceAgentParams(
 	return nil
 }
 
-// ValidateParametersWithStatus validates fence agent parameters by running a status command
-func ValidateParametersWithStatus(agent string, parameters map[ParameterName]string) *validation.ParameterValidationResult {
+// validateParametersWithStatus validates fence agent parameters by running a status command
+func validateParametersWithStatus(agent string, parameters map[ParameterName]string) *validation.ParameterValidationResult {
 	result := &validation.ParameterValidationResult{
 		IsSuccessful: true,
 		Message:      "",
 	}
 
 	// Build command with status action
-	command := []string{agent, ParameterActionName, parameterActionStatusValue}
+	command := []string{agent, parameterActionName, parameterActionStatusValue}
 
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
-		if string(paramName) != actionName && string(paramName) != ParameterActionName {
+		if string(paramName) != actionName && string(paramName) != parameterActionName {
 			command = append(command, string(paramName), paramValue)
 		}
 	}
@@ -281,12 +280,12 @@ func ValidateParametersWithStatus(agent string, parameters map[ParameterName]str
 		result.IsSuccessful = false
 		if ctx.Err() == context.DeadlineExceeded {
 			result.Message = fmt.Sprintf("status command timed out after %v", parameterValidationTimeout)
-			webhookTemplateValidatorLog.Info("ValidateParametersWithStatus status command timed out", "result", result)
+			webhookTemplateValidatorLog.Info("validateParametersWithStatus status command timed out", "result", result)
 			return result
 		}
 
 		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout)
-		webhookTemplateValidatorLog.Info("ValidateParametersWithStatus status command failed", "result", result)
+		webhookTemplateValidatorLog.Info("validateParametersWithStatus status command failed", "result", result)
 		return result
 	}
 
@@ -301,9 +300,9 @@ func ValidateParametersWithStatus(agent string, parameters map[ParameterName]str
 	return result
 }
 
-// ValidateActionParameter validates that action parameters are set correctly
-func ValidateActionParameter(paramName, paramVal string) error {
-	if (paramName == actionName || paramName == ParameterActionName) && paramVal != "" && paramVal != ParameterActionRebootValue {
+// validateActionParameter validates that action parameters are set correctly
+func validateActionParameter(paramName, paramVal string) error {
+	if (paramName == actionName || paramName == parameterActionName) && paramVal != "" && paramVal != parameterActionRebootValue {
 		// --action parameter with a different value from reboot is not supported
 		err := fmt.Errorf("FAR doesn't support any other action than reboot")
 		webhookTemplateValidatorLog.Error(err, "can't build CR with this action attribute", "action", paramVal)

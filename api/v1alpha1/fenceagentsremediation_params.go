@@ -35,12 +35,9 @@ import (
 const (
 	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 
-	ParameterActionRebootValue = "reboot"
-
-	ParameterActionName = "--" + actionName
-
-	actionName = "action"
-
+	parameterActionRebootValue = "reboot"
+	parameterActionName        = "--" + actionName
+	actionName                 = "action"
 	parameterActionStatusValue = "status"
 )
 
@@ -51,6 +48,46 @@ var (
 
 type ParameterName string
 type NodeName string
+
+// BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
+// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
+func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[ParameterName]string, bool, error) {
+	paramsLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
+
+	nodeName := GetNodeName(far)
+	secretParams, err := collectRemediationSecretParams(
+		ctx,
+		k8sClient,
+		far.Spec.SharedSecretName,
+		far.Spec.NodeSecretNames,
+		nodeName,
+		far.Namespace,
+	)
+	if err != nil {
+		paramsLog.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
+		return nil, true, err
+	}
+
+	// First validate all parameters
+	if err := validateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
+		return nil, false, err
+	}
+
+	// If validation passes, build the parameters map
+	fenceAgentParams, err := buildFenceAgentParamsMap(far, secretParams)
+	if err != nil {
+		return nil, true, err
+	}
+
+	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
+	if _, exist := fenceAgentParams[parameterActionName]; !exist {
+		paramsLog.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
+		fenceAgentParams[parameterActionName] = parameterActionRebootValue
+	}
+
+	paramsLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
+	return fenceAgentParams, false, nil
+}
 
 // GetNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func GetNodeName(far *FenceAgentsRemediation) string {
@@ -106,48 +143,8 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 	return fenceAgentParams, nil
 }
 
-// BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[ParameterName]string, bool, error) {
-	paramsLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
-
-	nodeName := GetNodeName(far)
-	secretParams, err := CollectRemediationSecretParams(
-		ctx,
-		k8sClient,
-		far.Spec.SharedSecretName,
-		far.Spec.NodeSecretNames,
-		nodeName,
-		far.Namespace,
-	)
-	if err != nil {
-		paramsLog.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
-		return nil, true, err
-	}
-
-	// First validate all parameters
-	if err := ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
-		return nil, false, err
-	}
-
-	// If validation passes, build the parameters map
-	fenceAgentParams, err := buildFenceAgentParamsMap(far, secretParams)
-	if err != nil {
-		return nil, true, err
-	}
-
-	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParams[ParameterActionName]; !exist {
-		paramsLog.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[ParameterActionName] = ParameterActionRebootValue
-	}
-
-	paramsLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
-	return fenceAgentParams, false, nil
-}
-
-// CollectRemediationSecretParams collects the parameters from the shared secret and the node secret
-func CollectRemediationSecretParams(
+// collectRemediationSecretParams collects the parameters from the shared secret and the node secret
+func collectRemediationSecretParams(
 	ctx context.Context,
 	k8sClient client.Client,
 	sharedSecretName *string,
@@ -155,7 +152,7 @@ func CollectRemediationSecretParams(
 	nodeName string,
 	namespace string,
 ) (map[string]string, error) {
-	paramsLog.Info("CollectRemediationSecretParams start for node", "node", nodeName)
+	paramsLog.Info("collectRemediationSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
 	var sharedSecretParams map[string]string
 	var err error
@@ -190,7 +187,7 @@ func CollectRemediationSecretParams(
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
 		maps.Copy(secretParams, nodeSecretParams)
 	}
-	paramsLog.Info("CollectRemediationSecretParams finish successfully for node", "node", nodeName)
+	paramsLog.Info("collectRemediationSecretParams finish successfully for node", "node", nodeName)
 	return secretParams, nil
 }
 
