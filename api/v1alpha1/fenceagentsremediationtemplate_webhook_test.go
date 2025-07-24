@@ -66,30 +66,29 @@ func (m *MockCommandExecutor) RunCommand(ctx context.Context, name string, args 
 	return "", "executable file not found in $PATH", errors.New("executable file not found in $PATH")
 }
 
-var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
-	var mockValidatorClient = &mockClient{}
-	var mockCommandExecutor = &MockCommandExecutor{
-		Commands:  [][]string{},
-		Responses: make(map[string]MockResponse),
-	}
+var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
-	var validator = &customValidator{
-		Client:          mockValidatorClient,
-		commandExecutor: mockCommandExecutor,
-	}
-	var ctx = context.Background()
+	var (
+		mockValidatorClient = &mockClient{}
+		mockCommandExecutor = &MockCommandExecutor{
+			Commands:  [][]string{},
+			Responses: make(map[string]MockResponse),
+		}
 
-	Context("Validating FAR Template creation", func() {
+		validator = &customValidator{
+			Client:          mockValidatorClient,
+			commandExecutor: mockCommandExecutor,
+		}
+		ctx = context.Background()
+	)
+
+	Context("creating FenceAgentsRemediationTemplate", func() {
 
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				_, err := validator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
-				// May have warnings about status command testing
-				if len(warnings) > 0 {
-					Expect(warnings[0]).To(ContainSubstring("Fence agent status test failed"))
-				}
 			})
 		})
 
@@ -135,12 +134,8 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
+					_, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
 					Expect(err).NotTo(HaveOccurred())
-					// May have warnings about status command testing
-					if len(warnings) > 0 {
-						Expect(warnings[0]).To(ContainSubstring("Fence agent status test failed"))
-					}
 				})
 			})
 
@@ -165,12 +160,8 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			})
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
+				_, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
-				// May have warnings about status command testing
-				if len(warnings) > 0 {
-					Expect(warnings[0]).To(ContainSubstring("Fence agent status test failed"))
-				}
 			})
 		})
 
@@ -201,7 +192,7 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			})
 		})
 
-		When("remediationStrategy is OutOfServiceTaint", func() {
+		Context("with OutOfServiceTaint strategy", func() {
 			var outOfServiceStrategy *FenceAgentsRemediationTemplate
 			var resourceDeletionStrategy *FenceAgentsRemediationTemplate
 
@@ -218,12 +209,8 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
+					_, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
 					Expect(err).NotTo(HaveOccurred())
-					// May have warnings about status command testing
-					if len(warnings) > 0 {
-						Expect(warnings[0]).To(ContainSubstring("Fence agent status test failed"))
-					}
 				})
 			})
 

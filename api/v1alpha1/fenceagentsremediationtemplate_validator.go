@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/executor"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 const (
@@ -46,9 +45,17 @@ var (
 	webhookTemplateValidatorLog = logf.Log.WithName("fenceagentsremediationtemplate-validator")
 )
 
+// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,timeoutSeconds=13,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
+
 type customValidator struct {
 	client.Client
 	commandExecutor executor.CommandExecutor
+}
+
+// ParameterValidationResult contains the results of parameter validation
+type ParameterValidationResult struct {
+	IsSuccessful bool
+	Message      string
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
@@ -249,8 +256,8 @@ func validateFenceAgentParams(
 }
 
 // validateParametersWithStatus validates fence agent parameters by running a status command
-func validateParametersWithStatus(agent string, parameters map[ParameterName]string, exec executor.CommandExecutor) *validation.ParameterValidationResult {
-	result := &validation.ParameterValidationResult{
+func validateParametersWithStatus(agent string, parameters map[ParameterName]string, exec executor.CommandExecutor) *ParameterValidationResult {
+	result := &ParameterValidationResult{
 		IsSuccessful: true,
 		Message:      "",
 	}

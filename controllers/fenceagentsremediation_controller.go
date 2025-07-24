@@ -219,7 +219,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		fenceAgentParams, isRetryRequired, err := v1alpha1.BuildFenceAgentParams(ctx, r.Client, far)
+		faParams, isRetryRequired, err := v1alpha1.BuildFenceAgentParams(ctx, r.Client, far)
 		if err != nil {
 			if !isRetryRequired {
 				return emptyResult, nil
@@ -227,8 +227,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			return emptyResult, err
 		}
 
-		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(fenceAgentParams)...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", slices.Collect(maps.Keys(fenceAgentParams)))
+		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(faParams)...)
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", slices.Collect(maps.Keys(faParams)))
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil

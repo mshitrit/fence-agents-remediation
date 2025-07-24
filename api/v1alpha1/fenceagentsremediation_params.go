@@ -46,9 +46,6 @@ var (
 	paramsLog = logf.Log.WithName("fenceagentsremediation-params")
 )
 
-type ParameterName string
-type NodeName string
-
 // BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[ParameterName]string, bool, error) {

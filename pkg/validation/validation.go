@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"time"
 
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
@@ -32,17 +31,6 @@ type OutOfServiceTaintValidator struct {
 type AgentExists func(string) (bool, error)
 type validateAgentExistence struct {
 	agentExists AgentExists
-}
-
-// ParameterValidationResult contains the results of parameter validation
-type ParameterValidationResult struct {
-	IsSuccessful bool
-	Message      string
-}
-
-// FenceAgentParameterValidator validates fence agent parameters
-type FenceAgentParameterValidator struct {
-	timeout time.Duration
 }
 
 // isAgentFileExists returns true if the agent name matches a binary, and false otherwise

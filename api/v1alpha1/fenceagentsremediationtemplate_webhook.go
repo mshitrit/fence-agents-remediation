@@ -31,9 +31,9 @@ var (
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
 )
 
-func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(farTemplate).
 		WithValidator(&customValidator{
 			Client:          mgr.GetClient(),
 			commandExecutor: &executor.RealCommandExecutor{},
@@ -48,14 +48,12 @@ func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manage
 var _ webhook.Defaulter = &FenceAgentsRemediationTemplate{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) Default() {
-	webhookFARTemplateLog.Info("default", "name", r.Name)
-	if r.GetAnnotations() == nil {
-		r.Annotations = make(map[string]string)
+func (farTemplate *FenceAgentsRemediationTemplate) Default() {
+	webhookFARTemplateLog.Info("default", "name", farTemplate.Name)
+	if farTemplate.GetAnnotations() == nil {
+		farTemplate.Annotations = make(map[string]string)
 	}
-	if _, isSameKindAnnotationSet := r.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
-		r.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
+	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
+		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
 }
-
-// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,timeoutSeconds=13,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1

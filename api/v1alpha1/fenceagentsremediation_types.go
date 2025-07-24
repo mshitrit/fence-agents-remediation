@@ -49,6 +49,8 @@ const (
 	OutOfServiceTaintRemediationStrategy = RemediationStrategyType("OutOfServiceTaint")
 )
 
+type ParameterName string
+type NodeName string
 type RemediationStrategyType string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
