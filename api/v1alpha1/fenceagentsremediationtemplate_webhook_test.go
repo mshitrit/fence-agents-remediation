@@ -6,13 +6,36 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // mockClient for testing
 type mockClient struct {
 	client.Client
+}
+
+// Implement Get method to handle secret retrieval in tests
+func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	// Return a pre-built secret for testing duplicate parameters
+	if key.Name == "test-node-secret" && key.Namespace == "test-namespace" {
+		if secret, ok := obj.(*corev1.Secret); ok {
+			secret.ObjectMeta = metav1.ObjectMeta{
+				Name:      "test-node-secret",
+				Namespace: "test-namespace",
+			}
+			secret.Data = map[string][]byte{
+				"--ip":       []byte("192.168.1.100"), // This will conflict with NodeParameters
+				"--username": []byte("admin"),
+			}
+			return nil
+		}
+	}
+	// Return NotFound error for any other secret to simulate missing secrets
+	return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
 }
 
 var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
@@ -243,7 +266,101 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 	})
+
+	Context("validating parameter validation functionality", func() {
+		It("should fail when template has invalid action parameter", func() {
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-action-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							SharedParameters: map[ParameterName]string{
+								"--ip":     "192.168.1.100",
+								"--action": "off", // Invalid action - only "reboot" is supported
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("FAR doesn't support any other action than reboot"))
+		})
+
+		It("should fail when templates reference missing node secrets", func() {
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "missing-secrets-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							SharedParameters: map[ParameterName]string{
+								"--ip": "192.168.1.100",
+							},
+							NodeSecretNames: map[NodeName]string{
+								"worker-1": "non-existent-node-secret",
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			// Should fail because node secrets are expected to exist when referenced
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("node secret 'non-existent-node-secret' not found in namespace 'test-namespace'"))
+		})
+
+		It("should fail when NodeSecretParam duplicates a NodeParam", func() {
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "duplicate-params-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							NodeParameters: map[ParameterName]map[NodeName]string{
+								"--ip": {
+									"worker-1": "192.168.1.101", // This will conflict with secret
+								},
+								"--port": {
+									"worker-1": "623",
+								},
+							},
+							NodeSecretNames: map[NodeName]string{
+								"worker-1": "test-node-secret", // This secret contains "--ip" parameter
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			// Should fail because "--ip" is defined in both NodeParameters and the secret
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR param"))
+		})
+
+	})
 })
+
+// Helper function to create string pointer
+func stringPtr(s string) *string {
+	return &s
+}
 
 func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
 	return getFARTemplate(agentName, ResourceDeletionRemediationStrategy)
