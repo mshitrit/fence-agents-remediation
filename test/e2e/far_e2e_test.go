@@ -23,7 +23,6 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 	e2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 )
 
@@ -56,8 +55,8 @@ var (
 
 var _ = Describe("FAR E2e", func() {
 	var (
-		testShareParam map[validation.ParameterName]string
-		testNodeParam  map[validation.ParameterName]map[validation.NodeName]string
+		testShareParam map[v1alpha1.ParameterName]string
+		testNodeParam  map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 	)
 	BeforeEach(func() {
 		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentAction)
@@ -163,8 +162,8 @@ var _ = AfterSuite(func() {
 })
 
 // buildSharedParameters returns a map key-value of shared parameters based on cluster platform type if it finds the credentials, otherwise an error
-func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) map[validation.ParameterName]string {
-	var testShareParam map[validation.ParameterName]string
+func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) map[v1alpha1.ParameterName]string {
+	var testShareParam map[v1alpha1.ParameterName]string
 
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
@@ -173,14 +172,14 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.aws.region}'
 		regionAWS := clusterPlatform.Status.PlatformStatus.AWS.Region
 
-		testShareParam = map[validation.ParameterName]string{
+		testShareParam = map[v1alpha1.ParameterName]string{
 			"--region":          regionAWS,
 			"--action":          action,
 			"--skip-race-check": "",
 			// "--verbose":    "", // for verbose result
 		}
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
-		testShareParam = map[validation.ParameterName]string{
+		testShareParam = map[v1alpha1.ParameterName]string{
 			"--ip":      "192.168.111.1",
 			"--action":  action,
 			"--lanplus": "",
@@ -190,10 +189,10 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 }
 
 // buildNodeParameters returns a map key-value of node parameters based on cluster platform type if it finds the node info list, otherwise an error
-func buildNodeParameters() (map[validation.ParameterName]map[validation.NodeName]string, error) {
+func buildNodeParameters() (map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, error) {
 	var (
-		nodeListParam  map[validation.NodeName]string
-		nodeIdentifier validation.ParameterName
+		nodeListParam  map[v1alpha1.NodeName]string
+		nodeIdentifier v1alpha1.ParameterName
 		err            error
 	)
 	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
@@ -213,7 +212,7 @@ func buildNodeParameters() (map[validation.ParameterName]map[validation.NodeName
 		}
 		nodeIdentifier = nodeIdentifierPrefixIPMI
 	}
-	testNodeParam := map[validation.ParameterName]map[validation.NodeName]string{nodeIdentifier: nodeListParam}
+	testNodeParam := map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{nodeIdentifier: nodeListParam}
 	return testNodeParam, nil
 }
 
@@ -270,15 +269,15 @@ func createTestedPod(nodeName string) *corev1.Pod {
 }
 
 // printNodeDetail prints the node details
-func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, testNodeParam map[validation.ParameterName]map[validation.NodeName]string) {
-	nodeNameParam := validation.NodeName(selectedNode.Name)
-	parameterName := validation.ParameterName(nodeIdentifierPrefix)
+func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, testNodeParam map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) {
+	nodeNameParam := v1alpha1.NodeName(selectedNode.Name)
+	parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
 	testNodeID := testNodeParam[parameterName][nodeNameParam]
 	log.Info("Testing Node", "Node name", selectedNode.Name, "Node ID", testNodeID)
 }
 
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
-func createFAR(nodeName string, agent string, sharedParameters map[validation.ParameterName]string, nodeParameters map[validation.ParameterName]map[validation.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
+func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
@@ -489,9 +488,9 @@ func buildSecretMap(clusterPlatform *configv1.Infrastructure) (map[string]string
 	return secrets, nil
 }
 
-func addSecretsToSharedParams(testShareParam map[validation.ParameterName]string) map[validation.ParameterName]string {
+func addSecretsToSharedParams(testShareParam map[v1alpha1.ParameterName]string) map[v1alpha1.ParameterName]string {
 	for key, value := range secretMap {
-		testShareParam[validation.ParameterName(key)] = value
+		testShareParam[v1alpha1.ParameterName(key)] = value
 	}
 	return testShareParam
 }

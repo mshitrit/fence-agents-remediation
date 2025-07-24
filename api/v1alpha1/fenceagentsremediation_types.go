@@ -18,8 +18,6 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -83,11 +81,11 @@ type FenceAgentsRemediationSpec struct {
 
 	// SharedParameters are parameters common to all nodes
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	SharedParameters map[validation.ParameterName]string `json:"sharedparameters,omitempty"`
+	SharedParameters map[ParameterName]string `json:"sharedparameters,omitempty"`
 
 	// NodeParameters are passed to the fencing agent according to the node that is fenced, since they are node specific
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeParameters map[validation.ParameterName]map[validation.NodeName]string `json:"nodeparameters,omitempty"`
+	NodeParameters map[ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
 
 	// RemediationStrategy is the remediation method for unhealthy nodes.
 	// Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
@@ -102,7 +100,7 @@ type FenceAgentsRemediationSpec struct {
 	// NodeSecretNames maps the node name to the Secret name which contains params relevant for that node.
 	// +optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeSecretNames map[validation.NodeName]string `json:"nodeSecrets,omitempty"`
+	NodeSecretNames map[NodeName]string `json:"nodeSecrets,omitempty"`
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.

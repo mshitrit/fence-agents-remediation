@@ -44,7 +44,6 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -280,7 +279,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 }
 
 // mapToSliceConvert converts param value map to slice
-func mapToSliceConvert(fenceAgentParams map[validation.ParameterName]string) []string {
+func mapToSliceConvert(fenceAgentParams map[v1alpha1.ParameterName]string) []string {
 	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
 	for paramName, paramVal := range fenceAgentParams {
 		fenceAgentParamsSlice = appendParamToSlice(fenceAgentParamsSlice, paramName, paramVal)
@@ -331,7 +330,7 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
-func appendParamToSlice(fenceAgentParams []string, paramName validation.ParameterName, paramVal string) []string {
+func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterName, paramVal string) []string {
 	stringParam := string(paramName)
 	if paramVal != "" {
 		fenceAgentParams = append(fenceAgentParams, fmt.Sprintf("%s=%s", stringParam, paramVal))

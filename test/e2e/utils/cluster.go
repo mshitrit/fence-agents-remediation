@@ -12,7 +12,7 @@ import (
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	machineclient "github.com/openshift/client-go/machine/clientset/versioned"
 
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
 // Inspired from https://github.com/hybrid-cloud-patterns/patterns-operator/blob/main/controllers/pattern_controller.go#L293-L313
@@ -66,11 +66,11 @@ func getNodeRoleFromMachine(nodeLabels map[string]string) string {
 }
 
 // GetAWSNodeInfoList returns a list of the node names and their identification, e.g., AWS instance ID
-func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[validation.NodeName]string, error) {
+func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.NodeName]string, error) {
 	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.spec.providerID}'
 	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.status.nodeRef.name}'
 
-	nodeList := make(map[validation.NodeName]string)
+	nodeList := make(map[v1alpha1.NodeName]string)
 
 	// Get the list of Machines in the openshift-machine-api namespace
 	machineList, err := machineClient.MachineV1beta1().Machines(machinesNamespace).List(context.TODO(), metav1.ListOptions{})
@@ -91,7 +91,7 @@ func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[validation.
 				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it's provider ID is missing", machine.ObjectMeta.GetName())
 			}
 		} else {
-			nodeName := validation.NodeName(machine.Status.NodeRef.Name)
+			nodeName := v1alpha1.NodeName(machine.Status.NodeRef.Name)
 			nodeRole := getNodeRoleFromMachine(machine.Labels)
 			providerID := *machine.Spec.ProviderID
 
@@ -106,11 +106,11 @@ func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[validation.
 }
 
 // GetBMHNodeInfoList returns a list of the node names and their identification, e.g., ports
-func GetBMHNodeInfoList(machineClient *machineclient.Clientset) (map[validation.NodeName]string, error) {
+func GetBMHNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.NodeName]string, error) {
 
 	//TODO: seacrch for BM and fetch ports
 
-	nodeList := map[validation.NodeName]string{
+	nodeList := map[v1alpha1.NodeName]string{
 		"master-0": "6230",
 		"master-1": "6231",
 		"master-2": "6232",

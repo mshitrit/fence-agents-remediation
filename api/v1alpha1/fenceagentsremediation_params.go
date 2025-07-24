@@ -19,24 +19,38 @@ package v1alpha1
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
+	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/template"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 const (
 	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
+
+	ParameterActionRebootValue = "reboot"
+
+	ParameterActionName = "--" + actionName
+
+	actionName = "action"
+
+	parameterActionStatusValue = "status"
 )
 
 var (
 	// paramsLog is for logging in this package.
 	paramsLog = logf.Log.WithName("fenceagentsremediation-params")
 )
+
+type ParameterName string
+type NodeName string
 
 // GetNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func GetNodeName(far *FenceAgentsRemediation) string {
@@ -51,9 +65,9 @@ func GetNodeName(far *FenceAgentsRemediation) string {
 }
 
 // buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
-func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[string]string) (map[validation.ParameterName]string, error) {
+func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[string]string) (map[ParameterName]string, error) {
 	nodeName := GetNodeName(far)
-	fenceAgentParams := make(map[validation.ParameterName]string)
+	fenceAgentParams := make(map[ParameterName]string)
 
 	// Add shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
@@ -67,7 +81,7 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 
 	// Add node parameters (these can override shared parameters)
 	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[validation.NodeName(nodeName)]; isFound {
+		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
 			if _, exist := fenceAgentParams[paramName]; exist {
 				paramsLog.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
 			}
@@ -79,7 +93,7 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 
 	// Add secret parameters
 	for secretKey, secretVal := range secretParams {
-		secretParam := validation.ParameterName(secretKey)
+		secretParam := ParameterName(secretKey)
 		fenceAgentParams[secretParam] = secretVal
 	}
 
@@ -94,11 +108,11 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 
 // BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[validation.ParameterName]string, bool, error) {
+func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[ParameterName]string, bool, error) {
 	paramsLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
 
 	nodeName := GetNodeName(far)
-	secretParams, err := validation.CollectRemediationSecretParams(
+	secretParams, err := CollectRemediationSecretParams(
 		ctx,
 		k8sClient,
 		far.Spec.SharedSecretName,
@@ -112,7 +126,7 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	}
 
 	// First validate all parameters
-	if err := validation.ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
+	if err := ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
 		return nil, false, err
 	}
 
@@ -123,11 +137,100 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParams[validation.ParameterActionName]; !exist {
+	if _, exist := fenceAgentParams[ParameterActionName]; !exist {
 		paramsLog.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[validation.ParameterActionName] = validation.ParameterActionRebootValue
+		fenceAgentParams[ParameterActionName] = ParameterActionRebootValue
 	}
 
 	paramsLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
 	return fenceAgentParams, false, nil
+}
+
+// CollectRemediationSecretParams collects the parameters from the shared secret and the node secret
+func CollectRemediationSecretParams(
+	ctx context.Context,
+	k8sClient client.Client,
+	sharedSecretName *string,
+	nodeSecretNames map[NodeName]string,
+	nodeName string,
+	namespace string,
+) (map[string]string, error) {
+	paramsLog.Info("CollectRemediationSecretParams start for node", "node", nodeName)
+	secretParams := map[string]string{}
+	var sharedSecretParams map[string]string
+	var err error
+
+	// collect secret params from shared secret
+	if sharedSecretName != nil {
+		sharedSecretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	// Templating secret shared parameters
+	for paramName, paramVal := range sharedSecretParams {
+		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
+		if err != nil {
+			paramsLog.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
+			return secretParams, err
+		}
+		secretParams[paramName] = processedParamVal
+	}
+
+	// collect secret params from the node's secret
+	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
+	var nodeSecretParams map[string]string
+	if isFound {
+		nodeSecretParams, err = collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
+		if err != nil {
+			return nil, err
+		}
+		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
+		maps.Copy(secretParams, nodeSecretParams)
+	}
+	paramsLog.Info("CollectRemediationSecretParams finish successfully for node", "node", nodeName)
+	return secretParams, nil
+}
+
+// collectSecretParams reads and adds the secret params if they are available
+// For shared secrets, IsNotFound errors are ignored (returns empty map)
+// For node secrets, IsNotFound errors are returned as errors
+func collectSecretParams(
+	ctx context.Context,
+	k8sClient client.Client,
+	secretName, namespace string,
+	isSharedSecret bool,
+) (map[string]string, error) {
+	secretParams := make(map[string]string)
+
+	// Get the secret directly (inlined from getSecret)
+	secret := &corev1.Secret{}
+	secretKeyObj := client.ObjectKey{Name: secretName, Namespace: namespace}
+
+	if err := k8sClient.Get(ctx, secretKeyObj, secret); err != nil {
+		if apiErrors.IsNotFound(err) {
+			if isSharedSecret {
+				// For shared secrets, IsNotFound is OK - return empty params
+				paramsLog.Info("shared secret not found, continuing with empty params", "secret name", secretName, "namespace", namespace)
+				return secretParams, nil
+			}
+			// For node secrets, IsNotFound is an error
+			paramsLog.Error(err, "node secret not found", "secret name", secretName, "namespace", namespace)
+			return nil, fmt.Errorf("node secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
+
+		}
+		// For any other error, always return it
+		paramsLog.Error(err, "failed to get secret", "secret name", secretName, "namespace", namespace)
+		return nil, fmt.Errorf("failed to get secret '%s' in namespace '%s': %w", secretName, namespace, err)
+	}
+
+	// fill secret params from secret
+	for secretKey, secretVal := range secret.Data {
+		secretParams[secretKey] = string(secretVal)
+		paramsLog.Info("found a value from secret", "secret name", secretName, "parameter name", secretKey)
+	}
+
+	return secretParams, nil
 }

@@ -8,8 +8,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 // mockClient for testing
@@ -39,7 +37,7 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 		When("template has only shared parameters and no node parameters", func() {
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				farTemplate.Spec.Template.Spec.SharedParameters = map[validation.ParameterName]string{
+				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
 					"ip":       "192.168.1.100",
 					"username": "admin",
 					"password": "secret",
@@ -135,7 +133,7 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			})
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				farTemplate.Spec.Template.Spec.SharedParameters = map[validation.ParameterName]string{
+				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
 					"action": "off", // Invalid action
 				}
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
@@ -195,7 +193,7 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 					Template: FenceAgentsRemediationTemplateResource{
 						Spec: FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							SharedParameters: map[validation.ParameterName]string{
+							SharedParameters: map[ParameterName]string{
 								"--systems-uri": "/redfish/v1/Systems/{{.NodeName", // Missing closing brace
 								"--hostname":    "{{.InvalidField}}",               // Unsupported name, only NodeName is supported
 								"--port":        "{{.NodeName}}.com",               // Valid template
@@ -230,7 +228,7 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 					Template: FenceAgentsRemediationTemplateResource{
 						Spec: FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							SharedParameters: map[validation.ParameterName]string{
+							SharedParameters: map[ParameterName]string{
 								"--systems-uri": "/redfish/v1/Systems/{{.NodeName}}",
 								"--hostname":    "{{.NodeName}}.example.com",
 								"--port":        "623", // No template, should be fine
