@@ -55,21 +55,14 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	paramsLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
 
 	nodeName := GetNodeName(far)
-	secretParams, err := collectRemediationSecretParams(
-		ctx,
-		k8sClient,
-		far.Spec.SharedSecretName,
-		far.Spec.NodeSecretNames,
-		nodeName,
-		far.Namespace,
-	)
+	secretParams, err := collectRemediationSecretParams(ctx, k8sClient, far, nodeName)
 	if err != nil {
 		paramsLog.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
 		return nil, true, err
 	}
 
 	// First validate all parameters
-	if err := validateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
+	if err := validateFenceAgentParams(far, secretParams, nodeName); err != nil {
 		return nil, false, err
 	}
 
@@ -147,15 +140,18 @@ func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[stri
 func collectRemediationSecretParams(
 	ctx context.Context,
 	k8sClient client.Client,
-	sharedSecretName *string,
-	nodeSecretNames map[NodeName]string,
+	far *FenceAgentsRemediation,
 	nodeName string,
-	namespace string,
 ) (map[string]string, error) {
 	paramsLog.Info("collectRemediationSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
 	var sharedSecretParams map[string]string
 	var err error
+
+	// Extract secret names and namespace from FAR
+	sharedSecretName := far.Spec.SharedSecretName
+	nodeSecretNames := far.Spec.NodeSecretNames
+	namespace := far.Namespace
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
@@ -163,7 +159,6 @@ func collectRemediationSecretParams(
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	// Templating secret shared parameters

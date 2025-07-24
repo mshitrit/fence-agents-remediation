@@ -191,13 +191,16 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) map[string]bool {
 
 // validateFenceAgentParams validates all fence agent parameters without building the map
 func validateFenceAgentParams(
-	sharedParameters map[ParameterName]string,
-	nodeParameters map[ParameterName]map[NodeName]string,
+	far *FenceAgentsRemediation,
 	secretParams map[string]string,
 	nodeName string,
 ) error {
 	// Track parameter names for uniqueness validation
 	existingParams := make(map[ParameterName]bool)
+
+	// Extract parameters from FAR
+	sharedParameters := far.Spec.SharedParameters
+	nodeParameters := far.Spec.NodeParameters
 
 	// Validate shared parameters
 	for paramName, paramVal := range sharedParameters {
