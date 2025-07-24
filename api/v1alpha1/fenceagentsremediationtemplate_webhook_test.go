@@ -40,7 +40,7 @@ func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 	return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
 }
 
-// MockCommandExecutor for testing
+// MockCommandExecutor for testing - implements executor.CommandExecutor
 type MockCommandExecutor struct {
 	Commands  [][]string              // Track called commands
 	Responses map[string]MockResponse // Predefined responses

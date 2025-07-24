@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -31,26 +30,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/medik8s/fence-agents-remediation/pkg/executor"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
-
-// CommandExecutor interface for testable command execution
-type CommandExecutor interface {
-	RunCommand(ctx context.Context, name string, args ...string) (stdout, stderr string, err error)
-}
-
-// RealCommandExecutor implements CommandExecutor using actual exec
-type RealCommandExecutor struct{}
-
-func (r *RealCommandExecutor) RunCommand(ctx context.Context, name string, args ...string) (string, string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	var outBuilder, errBuilder strings.Builder
-	cmd.Stdout = &outBuilder
-	cmd.Stderr = &errBuilder
-
-	err := cmd.Run()
-	return outBuilder.String(), errBuilder.String(), err
-}
 
 const (
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
@@ -66,7 +48,7 @@ var (
 
 type customValidator struct {
 	client.Client
-	commandExecutor CommandExecutor
+	commandExecutor executor.CommandExecutor
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
@@ -267,7 +249,7 @@ func validateFenceAgentParams(
 }
 
 // validateParametersWithStatus validates fence agent parameters by running a status command
-func validateParametersWithStatus(agent string, parameters map[ParameterName]string, executor CommandExecutor) *validation.ParameterValidationResult {
+func validateParametersWithStatus(agent string, parameters map[ParameterName]string, exec executor.CommandExecutor) *validation.ParameterValidationResult {
 	result := &validation.ParameterValidationResult{
 		IsSuccessful: true,
 		Message:      "",
@@ -289,7 +271,7 @@ func validateParametersWithStatus(agent string, parameters map[ParameterName]str
 
 	webhookTemplateValidatorLog.Info("Testing fence agent status command", "agent", agent, "command", command)
 
-	stdout, stderr, err := executor.RunCommand(ctx, command[0], command[1:]...)
+	stdout, stderr, err := exec.RunCommand(ctx, command[0], command[1:]...)
 
 	if err != nil {
 		result.IsSuccessful = false
