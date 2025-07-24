@@ -304,6 +304,12 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 	})
 
 	Context("validating parameter validation functionality", func() {
+		BeforeEach(func() {
+			// Reset mock state before each test
+			mockCommandExecutor.Commands = [][]string{}
+			mockCommandExecutor.Responses = make(map[string]MockResponse)
+		})
+
 		It("should fail when template has invalid action parameter", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
@@ -388,12 +394,6 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR param"))
-		})
-
-		BeforeEach(func() {
-			// Reset mock state before each test
-			mockCommandExecutor.Commands = [][]string{}
-			mockCommandExecutor.Responses = make(map[string]MockResponse)
 		})
 
 		It("should test validateParametersWithStatus success scenario", func() {
@@ -536,11 +536,6 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 
 	})
 })
-
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
-}
 
 func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
 	return getFARTemplate(agentName, ResourceDeletionRemediationStrategy)
