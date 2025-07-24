@@ -18,10 +18,7 @@ package v1alpha1
 
 import (
 	"context"
-	"errors"
 	"fmt"
-
-	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,16 +27,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/medik8s/fence-agents-remediation/pkg/template"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
-const (
-	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-)
-
 var (
-	// webhookFARTemplateLog is for logging in this package.
+	// webhookTemplateValidatorLog is for logging in this package.
 	webhookTemplateValidatorLog = logf.Log.WithName("fenceagentsremediationtemplate-validator")
 	// parameterValidator for validating fence agent parameters
 	parameterValidator = validation.NewFenceAgentParameterValidator()
@@ -186,98 +178,4 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) map[string]bool {
 		nodeNames[string(nodeName)] = true
 	}
 	return nodeNames
-}
-
-// GetNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
-func GetNodeName(far *FenceAgentsRemediation) string {
-	ann := far.GetAnnotations()
-	if ann == nil {
-		return far.GetName()
-	}
-	if nodeName, isNodeNameAnnotationExist := ann[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
-		return nodeName
-	}
-	return far.GetName()
-}
-
-// buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
-func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[string]string) (map[validation.ParameterName]string, error) {
-	nodeName := GetNodeName(far)
-	fenceAgentParams := make(map[validation.ParameterName]string)
-
-	// Add shared parameters
-	for paramName, paramVal := range far.Spec.SharedParameters {
-		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
-		if err != nil {
-			webhookTemplateValidatorLog.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
-			return fenceAgentParams, err
-		}
-		fenceAgentParams[paramName] = processedParamVal
-	}
-
-	// Add node parameters (these can override shared parameters)
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[validation.NodeName(nodeName)]; isFound {
-			if _, exist := fenceAgentParams[paramName]; exist {
-				webhookTemplateValidatorLog.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
-			}
-			fenceAgentParams[paramName] = nodeVal
-		} else {
-			webhookTemplateValidatorLog.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
-		}
-	}
-
-	// Add secret parameters
-	for secretKey, secretVal := range secretParams {
-		secretParam := validation.ParameterName(secretKey)
-		fenceAgentParams[secretParam] = secretVal
-	}
-
-	if len(fenceAgentParams) == 0 {
-		err := errors.New(errorMissingParams)
-		webhookTemplateValidatorLog.Error(err, "Missing parameters")
-		return nil, err
-	}
-
-	return fenceAgentParams, nil
-}
-
-// BuildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation) (map[validation.ParameterName]string, bool, error) {
-	webhookTemplateValidatorLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
-
-	nodeName := GetNodeName(far)
-	secretParams, err := validation.CollectRemediationSecretParams(
-		ctx,
-		k8sClient,
-		far.Spec.SharedSecretName,
-		far.Spec.NodeSecretNames,
-		nodeName,
-		far.Namespace,
-	)
-	if err != nil {
-		webhookTemplateValidatorLog.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
-		return nil, true, err
-	}
-
-	// First validate all parameters
-	if err := validation.ValidateFenceAgentParams(far.Spec.SharedParameters, far.Spec.NodeParameters, secretParams, nodeName); err != nil {
-		return nil, false, err
-	}
-
-	// If validation passes, build the parameters map
-	fenceAgentParams, err := buildFenceAgentParamsMap(far, secretParams)
-	if err != nil {
-		return nil, true, err
-	}
-
-	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParams[validation.ParameterActionName]; !exist {
-		webhookTemplateValidatorLog.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[validation.ParameterActionName] = validation.ParameterActionRebootValue
-	}
-
-	webhookTemplateValidatorLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
-	return fenceAgentParams, false, nil
 }
