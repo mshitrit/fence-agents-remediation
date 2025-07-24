@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -228,7 +229,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(fenceAgentParams)...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", maps.Keys(fenceAgentParams))
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", slices.Collect(maps.Keys(fenceAgentParams)))
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
