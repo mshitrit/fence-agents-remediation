@@ -34,6 +34,24 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
+// CommandExecutor interface for testable command execution
+type CommandExecutor interface {
+	RunCommand(ctx context.Context, name string, args ...string) (stdout, stderr string, err error)
+}
+
+// RealCommandExecutor implements CommandExecutor using actual exec
+type RealCommandExecutor struct{}
+
+func (r *RealCommandExecutor) RunCommand(ctx context.Context, name string, args ...string) (string, string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var outBuilder, errBuilder strings.Builder
+	cmd.Stdout = &outBuilder
+	cmd.Stderr = &errBuilder
+
+	err := cmd.Run()
+	return outBuilder.String(), errBuilder.String(), err
+}
+
 const (
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
 
@@ -48,6 +66,7 @@ var (
 
 type customValidator struct {
 	client.Client
+	commandExecutor CommandExecutor
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
@@ -161,7 +180,7 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 
 		if !skipStatusValidation {
 			// Validate the complete parameter set with status command
-			result := validateParametersWithStatus(spec.Agent, completeParams)
+			result := validateParametersWithStatus(spec.Agent, completeParams, v.commandExecutor)
 			if !result.IsSuccessful {
 				return warnings, fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
 			}
@@ -248,7 +267,7 @@ func validateFenceAgentParams(
 }
 
 // validateParametersWithStatus validates fence agent parameters by running a status command
-func validateParametersWithStatus(agent string, parameters map[ParameterName]string) *validation.ParameterValidationResult {
+func validateParametersWithStatus(agent string, parameters map[ParameterName]string, executor CommandExecutor) *validation.ParameterValidationResult {
 	result := &validation.ParameterValidationResult{
 		IsSuccessful: true,
 		Message:      "",
@@ -270,14 +289,7 @@ func validateParametersWithStatus(agent string, parameters map[ParameterName]str
 
 	webhookTemplateValidatorLog.Info("Testing fence agent status command", "agent", agent, "command", command)
 
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	var outBuilder, errBuilder strings.Builder
-	cmd.Stdout = &outBuilder
-	cmd.Stderr = &errBuilder
-
-	err := cmd.Run()
-	stdout := outBuilder.String()
-	stderr := errBuilder.String()
+	stdout, stderr, err := executor.RunCommand(ctx, command[0], command[1:]...)
 
 	if err != nil {
 		result.IsSuccessful = false

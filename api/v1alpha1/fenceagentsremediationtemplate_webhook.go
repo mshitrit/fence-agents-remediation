@@ -32,7 +32,7 @@ var (
 func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
-		WithValidator(&customValidator{mgr.GetClient()}).
+		WithValidator(&customValidator{mgr.GetClient(), &RealCommandExecutor{}}).
 		Complete()
 }
 

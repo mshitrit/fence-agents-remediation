@@ -2,6 +2,8 @@ package v1alpha1
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -38,9 +40,43 @@ func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 	return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
 }
 
+// MockCommandExecutor for testing
+type MockCommandExecutor struct {
+	Commands  [][]string              // Track called commands
+	Responses map[string]MockResponse // Predefined responses
+}
+
+type MockResponse struct {
+	Stdout string
+	Stderr string
+	Err    error
+}
+
+func (m *MockCommandExecutor) RunCommand(ctx context.Context, name string, args ...string) (string, string, error) {
+	fullCmd := append([]string{name}, args...)
+	m.Commands = append(m.Commands, fullCmd)
+
+	// Match command pattern and return predefined response
+	cmdStr := strings.Join(fullCmd, " ")
+	if response, exists := m.Responses[cmdStr]; exists {
+		return response.Stdout, response.Stderr, response.Err
+	}
+
+	// Default behavior - return error as fence agent is not available in test environment
+	return "", "executable file not found in $PATH", errors.New("executable file not found in $PATH")
+}
+
 var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 	var mockValidatorClient = &mockClient{}
-	var validator = &customValidator{mockValidatorClient}
+	var mockCommandExecutor = &MockCommandExecutor{
+		Commands:  [][]string{},
+		Responses: make(map[string]MockResponse),
+	}
+
+	var validator = &customValidator{
+		Client:          mockValidatorClient,
+		commandExecutor: mockCommandExecutor,
+	}
 	var ctx = context.Background()
 
 	Context("Validating FAR Template creation", func() {
@@ -352,6 +388,150 @@ var _ = Describe("FenceAgentsRemediationTemplate validation", func() {
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR param"))
+		})
+
+		BeforeEach(func() {
+			// Reset mock state before each test
+			mockCommandExecutor.Commands = [][]string{}
+			mockCommandExecutor.Responses = make(map[string]MockResponse)
+		})
+
+		It("should test validateParametersWithStatus success scenario", func() {
+			// Setup mock to return "Status: ON" for successful validation
+			// Note: We need to match the actual command string format
+			mockCommandExecutor.Responses["fence_ipmilan --action status --ip 192.168.1.100 --port 623"] = MockResponse{
+				Stdout: "Status: ON\n",
+				Stderr: "",
+				Err:    nil,
+			}
+
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "status-success-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: "fence_ipmilan",
+							NodeParameters: map[ParameterName]map[NodeName]string{
+								"--ip": {
+									"worker-1": "192.168.1.100",
+								},
+								"--port": {
+									"worker-1": "623",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			// Should succeed because mock returns "Status: ON"
+			Expect(warnings).To(BeEmpty())
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify the command was called correctly
+			Expect(mockCommandExecutor.Commands).To(HaveLen(1))
+			// Verify it contains the expected components (order may vary)
+			actualCmd := mockCommandExecutor.Commands[0]
+			Expect(actualCmd).To(ContainElement("fence_ipmilan"))
+			Expect(actualCmd).To(ContainElement("--action"))
+			Expect(actualCmd).To(ContainElement("status"))
+			Expect(actualCmd).To(ContainElement("--ip"))
+			Expect(actualCmd).To(ContainElement("192.168.1.100"))
+			Expect(actualCmd).To(ContainElement("--port"))
+			Expect(actualCmd).To(ContainElement("623"))
+		})
+
+		It("should test validateParametersWithStatus failure scenario", func() {
+			// Setup mock to return non-ON status
+			mockCommandExecutor.Responses["fence_ipmilan --action status --ip 192.168.1.101"] = MockResponse{
+				Stdout: "Status: OFF\n",
+				Stderr: "",
+				Err:    nil,
+			}
+
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "status-failure-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: "fence_ipmilan",
+							NodeParameters: map[ParameterName]map[NodeName]string{
+								"--ip": {
+									"worker-1": "192.168.1.101",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			// Should succeed but with a warning because status is not ON
+			Expect(err).ToNot(HaveOccurred())
+			Expect(warnings).To(HaveLen(1))
+			Expect(warnings[0]).To(ContainSubstring("fence agent parameter validation succeeded with warning"))
+			Expect(warnings[0]).To(ContainSubstring("status is not ON"))
+
+			// Verify the command was called
+			Expect(mockCommandExecutor.Commands).To(HaveLen(1))
+			actualCmd := mockCommandExecutor.Commands[0]
+			Expect(actualCmd).To(ContainElement("fence_ipmilan"))
+			Expect(actualCmd).To(ContainElement("--action"))
+			Expect(actualCmd).To(ContainElement("status"))
+			Expect(actualCmd).To(ContainElement("--ip"))
+			Expect(actualCmd).To(ContainElement("192.168.1.101"))
+		})
+
+		It("should test validateParametersWithStatus command execution error", func() {
+			// Setup mock to return execution error
+			mockCommandExecutor.Responses["fence_ipmilan --action status --ip 192.168.1.102"] = MockResponse{
+				Stdout: "",
+				Stderr: "Connection failed",
+				Err:    errors.New("exit status 1"),
+			}
+
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "status-error-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: "fence_ipmilan",
+							NodeParameters: map[ParameterName]map[NodeName]string{
+								"--ip": {
+									"worker-1": "192.168.1.102",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			// Should fail because command execution failed
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("fence agent parameter validation failed"))
+			Expect(err.Error()).To(ContainSubstring("fence agent command failed"))
+			Expect(err.Error()).To(ContainSubstring("Connection failed"))
+
+			// Verify the command was called
+			Expect(mockCommandExecutor.Commands).To(HaveLen(1))
+			actualCmd := mockCommandExecutor.Commands[0]
+			Expect(actualCmd).To(ContainElement("fence_ipmilan"))
+			Expect(actualCmd).To(ContainElement("--action"))
+			Expect(actualCmd).To(ContainElement("status"))
+			Expect(actualCmd).To(ContainElement("--ip"))
+			Expect(actualCmd).To(ContainElement("192.168.1.102"))
 		})
 
 	})
