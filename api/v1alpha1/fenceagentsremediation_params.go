@@ -36,8 +36,8 @@ const (
 	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 
 	parameterActionRebootValue = "reboot"
-	parameterActionName        = "--" + actionName
 	actionName                 = "action"
+	parameterActionName        = "--" + actionName
 	parameterActionStatusValue = "status"
 )
 

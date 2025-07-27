@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +33,7 @@ import (
 )
 
 const (
-	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
+	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param, param name: %s"
 
 	// Parameter validation constants shouldn't exceed 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
 	parameterValidationTimeout = 3 * time.Second
@@ -45,6 +44,7 @@ var (
 	webhookTemplateValidatorLog = logf.Log.WithName("fenceagentsremediationtemplate-validator")
 )
 
+// Extending the default 10 sec timeout to 13 per ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
 // +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,timeoutSeconds=13,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
 type customValidator struct {
@@ -60,33 +60,15 @@ type ParameterValidationResult struct {
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	r := obj.(*FenceAgentsRemediationTemplate)
-	webhookTemplateValidatorLog.Info("validate create", "name", r.Name)
-
-	var allErrors []error
-	var allWarnings []string
-
-	// First, run the existing FAR validation logic
-	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
-	if validateFarErr != nil {
-		allErrors = append(allErrors, validateFarErr)
-	}
-	// Add validateFAR warnings
-	allWarnings = append(allWarnings, validateWarnings...)
-
-	// Perform enhanced parameter validation with secret collection
-	paramWarnings, validateParamErr := v.validateFenceAgentTemplate(ctx, r)
-	if validateParamErr != nil {
-		allErrors = append(allErrors, validateParamErr)
-	}
-	// Add parameter validation warnings
-	allWarnings = append(allWarnings, paramWarnings...)
-
-	return allWarnings, utilErrors.NewAggregate(allErrors)
+	return v.validate(ctx, obj)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
+	return v.validate(ctx, new)
+}
+
+func (v *customValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
 	r := new.(*FenceAgentsRemediationTemplate)
 	webhookTemplateValidatorLog.Info("validate update", "name", r.Name)
 
@@ -102,12 +84,12 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 	allWarnings = append(allWarnings, validateWarnings...)
 
 	// Perform enhanced parameter validation with secret collection
-	paramWarnings, validateParamErr := v.validateFenceAgentTemplate(ctx, r)
-	if validateParamErr != nil {
-		allErrors = append(allErrors, validateParamErr)
+	warnings, err := v.validateFenceAgentTemplate(ctx, r)
+	if err != nil {
+		allErrors = append(allErrors, err)
 	}
 	// Add parameter validation warnings
-	allWarnings = append(allWarnings, paramWarnings...)
+	allWarnings = append(allWarnings, warnings...)
 
 	return allWarnings, utilErrors.NewAggregate(allErrors)
 }
@@ -145,13 +127,13 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
 		webhookTemplateValidatorLog.Info("validateFenceAgentTemplate no nodes found")
-		nodeNames["temp-validation"] = true
+		nodeNames = append(nodeNames, "temp-validation")
 		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 		skipStatusValidation = true
 	}
 	// Validate parameters for each node mentioned in NodeParameters
-	for nodeName := range nodeNames {
-		// Create a temporary FAR CR from the template for this specific node
+	for _, nodeName := range nodeNames {
+		// Generate a temporary FAR CR from the template for this specific node
 		tempFAR := &FenceAgentsRemediation{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      nodeName,
@@ -184,16 +166,22 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	return warnings, nil
 }
 
-func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) map[string]bool {
-	nodeNames := make(map[string]bool)
+func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
+	nodeNamesMap := make(map[string]bool)
 	for _, nodeMap := range spec.NodeParameters {
 		for nodeName := range nodeMap {
-			nodeNames[string(nodeName)] = true
+			nodeNamesMap[string(nodeName)] = true
 		}
 	}
 	for nodeName, _ := range spec.NodeSecretNames {
-		nodeNames[string(nodeName)] = true
+		nodeNamesMap[string(nodeName)] = true
 	}
+
+	var nodeNames []string
+	for nodeName := range nodeNamesMap {
+		nodeNames = append(nodeNames, nodeName)
+	}
+
 	return nodeNames
 }
 
@@ -218,7 +206,7 @@ func validateFenceAgentParams(
 		}
 		// Verify param isn't already defined
 		if existingParams[paramName] {
-			err := errors.New(errorParamDefinedMultipleTimes)
+			err := fmt.Errorf(errorParamDefinedMultipleTimes, paramName)
 			webhookTemplateValidatorLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
 			return err
 		}
@@ -245,7 +233,7 @@ func validateFenceAgentParams(
 			return err
 		}
 		if existingParams[secretParam] {
-			err := errors.New(errorParamDefinedMultipleTimes)
+			err := fmt.Errorf(errorParamDefinedMultipleTimes, secretParam)
 			webhookTemplateValidatorLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
 			return err
 		}
