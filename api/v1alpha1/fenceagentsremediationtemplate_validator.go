@@ -114,12 +114,11 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	hasNodeParams := len(spec.NodeParameters) > 0
 	hasSecrets := spec.SharedSecretName != nil || spec.NodeSecretNames != nil
 
-	// If template has no parameters or secrets, skip parameter validation
-	// Templates are allowed to be empty - parameters can be added later
-	//TODO mshitrit should we allow this ?
+	// If template has no parameters or secrets, template is considered invalid
 	if !hasSharedParams && !hasNodeParams && !hasSecrets {
-		webhookTemplateValidatorLog.Info("validateFenceAgentTemplate return no params")
-		return warnings, nil
+		err := errors.New(errorMissingParams)
+		webhookTemplateValidatorLog.Error(err, "Missing parameters")
+		return nil, err
 	}
 
 	// Collect all unique node names from NodeParameters and NodeSecretNames

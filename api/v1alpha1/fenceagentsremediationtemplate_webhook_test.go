@@ -86,7 +86,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				_, err := validator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -94,7 +94,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("template has only shared parameters and no node parameters", func() {
 			It("should be accepted", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
 					"ip":       "192.168.1.100",
 					"username": "admin",
@@ -110,9 +110,31 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 		})
 
+		When("template has no shared parameters and no node parameters", func() {
+			It("should be rejected", func() {
+				farTemplate := &FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-" + validAgentName + "-template",
+					},
+					Spec: FenceAgentsRemediationTemplateSpec{
+						Template: FenceAgentsRemediationTemplateResource{
+							Spec: FenceAgentsRemediationSpec{
+								Agent:               validAgentName,
+								RemediationStrategy: ResourceDeletionRemediationStrategy,
+								// Explicitly no SharedParameters or NodeParameters
+							},
+						},
+					},
+				}
+				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				ExpectWithOffset(1, warnings).To(BeEmpty())
+				Expect(err).To(MatchError(ContainSubstring("nodeParameters or sharedParameters or both are missing, and they cannot be empty")))
+			})
+		})
+
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
-				farTemplate := getTestFARTemplate(invalidAgentName)
+				farTemplate := getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
@@ -156,10 +178,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		var oldFARTemplate *FenceAgentsRemediationTemplate
 		When("agent name match format and binary", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getTestFARTemplate(invalidAgentName)
+				oldFARTemplate = getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 			})
 			It("should be accepted", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				_, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -167,10 +189,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name was not found ", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getTestFARTemplate(invalidAgentName)
+				oldFARTemplate = getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 			})
 			It("should be rejected", func() {
-				farTemplate := getTestFARTemplate(invalidAgentName)
+				farTemplate := getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
@@ -179,10 +201,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("action parameter is invalid", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getTestFARTemplate(validAgentName)
+				oldFARTemplate = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 			})
 			It("should be rejected", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
 					"action": "off", // Invalid action
 				}
@@ -524,10 +546,6 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 	})
 })
 
-func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
-	return getFARTemplate(agentName, ResourceDeletionRemediationStrategy)
-}
-
 func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediationTemplate {
 	return &FenceAgentsRemediationTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -538,6 +556,11 @@ func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAg
 				Spec: FenceAgentsRemediationSpec{
 					Agent:               agentName,
 					RemediationStrategy: strategy,
+					// Add basic shared parameters so templates are not empty
+					SharedParameters: map[ParameterName]string{
+						"ip":       "192.168.1.100",
+						"username": "admin",
+					},
 				},
 			},
 		},
