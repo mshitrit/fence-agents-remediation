@@ -23,10 +23,10 @@ type mockClient struct {
 // Implement Get method to handle secret retrieval in tests
 func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	// Return a pre-built secret for testing duplicate parameters
-	if key.Name == "test-node-secret" && key.Namespace == "test-namespace" {
+	if key.Name == "test-node-secret-ip-conflict" && key.Namespace == "test-namespace" {
 		if secret, ok := obj.(*corev1.Secret); ok {
 			secret.ObjectMeta = metav1.ObjectMeta{
-				Name:      "test-node-secret",
+				Name:      "test-node-secret-ip-conflict",
 				Namespace: "test-namespace",
 			}
 			secret.Data = map[string][]byte{
@@ -369,7 +369,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 								},
 							},
 							NodeSecretNames: map[NodeName]string{
-								"worker-1": "test-node-secret", // This secret contains "--ip" parameter
+								"worker-1": "test-node-secret-ip-conflict", // This secret contains "--ip" parameter
 							},
 						},
 					},
