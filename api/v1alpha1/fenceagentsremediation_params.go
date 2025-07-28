@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 
@@ -33,8 +32,6 @@ import (
 )
 
 const (
-	errorMissingParams = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-
 	parameterActionRebootValue = "reboot"
 	actionName                 = "action"
 	parameterActionName        = "--" + actionName
@@ -58,15 +55,10 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 		return nil, true, err
 	}
 
-	// First validate all parameters
-	if err := validateFenceAgentParams(far, secretParams, nodeName); err != nil {
-		return nil, false, err
-	}
-
-	// If validation passes, build the parameters map
-	fenceAgentParams, err := buildFenceAgentParamsMap(far, secretParams)
+	// Build the parameters map with validation included
+	fenceAgentParams, err := validateFenceAgentParams(far, secretParams)
 	if err != nil {
-		return nil, true, err
+		return nil, false, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
@@ -89,48 +81,6 @@ func GetNodeName(far *FenceAgentsRemediation) string {
 		return nodeName
 	}
 	return far.GetName()
-}
-
-// buildFenceAgentParamsMap builds the fence agent parameters map after validation has passed
-func buildFenceAgentParamsMap(far *FenceAgentsRemediation, secretParams map[string]string) (map[ParameterName]string, error) {
-	nodeName := GetNodeName(far)
-	fenceAgentParams := make(map[ParameterName]string)
-
-	// Add shared parameters
-	for paramName, paramVal := range far.Spec.SharedParameters {
-		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
-		if err != nil {
-			paramsLog.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
-			return fenceAgentParams, err
-		}
-		fenceAgentParams[paramName] = processedParamVal
-	}
-
-	// Add node parameters (these can override shared parameters)
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
-			if _, exist := fenceAgentParams[paramName]; exist {
-				paramsLog.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
-			}
-			fenceAgentParams[paramName] = nodeVal
-		} else {
-			paramsLog.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
-		}
-	}
-
-	// Add secret parameters
-	for secretKey, secretVal := range secretParams {
-		secretParam := ParameterName(secretKey)
-		fenceAgentParams[secretParam] = secretVal
-	}
-
-	if len(fenceAgentParams) == 0 {
-		err := errors.New(errorMissingParams)
-		paramsLog.Error(err, "Missing parameters")
-		return nil, err
-	}
-
-	return fenceAgentParams, nil
 }
 
 // collectRemediationSecretParams collects the parameters from the shared secret and the node secret

@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -30,11 +31,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/executor"
+	"github.com/medik8s/fence-agents-remediation/pkg/template"
 )
 
 const (
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param, param name: %s"
-
+	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	// Parameter validation constants shouldn't exceed 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
 	parameterValidationTimeout = 3 * time.Second
 )
@@ -185,62 +187,78 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
 	return nodeNames
 }
 
-// validateFenceAgentParams validates all fence agent parameters without building the map
-func validateFenceAgentParams(
-	far *FenceAgentsRemediation,
-	secretParams map[string]string,
-	nodeName string,
-) error {
+// validateFenceAgentParams builds the fence agent parameters map with validation
+func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams map[string]string) (map[ParameterName]string, error) {
+	nodeName := GetNodeName(far)
+	fenceAgentParams := make(map[ParameterName]string)
+
 	// Track parameter names for uniqueness validation
 	existingParams := make(map[ParameterName]bool)
 
-	// Extract parameters from FAR
-	sharedParameters := far.Spec.SharedParameters
-	nodeParameters := far.Spec.NodeParameters
-
-	// Validate shared parameters
-	for paramName, paramVal := range sharedParameters {
+	// Validate and add shared parameters
+	for paramName, paramVal := range far.Spec.SharedParameters {
 		// Verify action must be reboot
 		if err := validateActionParameter(string(paramName), paramVal); err != nil {
-			return err
+			return nil, err
 		}
 		// Verify param isn't already defined
 		if existingParams[paramName] {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, paramName)
-			webhookTemplateValidatorLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
-			return err
+			paramsLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+			return nil, err
 		}
 		existingParams[paramName] = true
+
+		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
+		if err != nil {
+			paramsLog.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
+			return fenceAgentParams, err
+		}
+		fenceAgentParams[paramName] = processedParamVal
 	}
 
-	// Validate node parameters
-	for paramName, nodeMap := range nodeParameters {
+	// Validate and add node parameters (these can override shared parameters)
+	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
 			// Verify action must be reboot
 			if err := validateActionParameter(string(paramName), nodeVal); err != nil {
-				return err
+				return nil, err
 			}
 			// For node params we don't enforce uniqueness as node param value will override shared param
 			existingParams[paramName] = true
+
+			if _, exist := fenceAgentParams[paramName]; exist {
+				paramsLog.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
+			}
+			fenceAgentParams[paramName] = nodeVal
+		} else {
+			paramsLog.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
 		}
 	}
 
-	// Validate secret parameters
+	// Validate and add secret parameters
 	for secretKey, secretVal := range secretParams {
 		secretParam := ParameterName(secretKey)
 		// Verify action must be reboot
 		if err := validateActionParameter(string(secretParam), secretVal); err != nil {
-			return err
+			return nil, err
 		}
 		if existingParams[secretParam] {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, secretParam)
-			webhookTemplateValidatorLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
-			return err
+			paramsLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
+			return nil, err
 		}
 		existingParams[secretParam] = true
+		fenceAgentParams[secretParam] = secretVal
 	}
 
-	return nil
+	if len(fenceAgentParams) == 0 {
+		err := errors.New(errorMissingParams)
+		paramsLog.Error(err, "Missing parameters")
+		return nil, err
+	}
+
+	return fenceAgentParams, nil
 }
 
 // validateParametersWithStatus validates fence agent parameters by running a status command
