@@ -3,6 +3,8 @@ package v1alpha1
 import (
 	"context"
 	"errors"
+	"slices"
+	"sort"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -56,14 +58,34 @@ func (m *MockCommandExecutor) RunCommand(ctx context.Context, name string, args 
 	fullCmd := append([]string{name}, args...)
 	m.Commands = append(m.Commands, fullCmd)
 
-	// Match command pattern and return predefined response
-	cmdStr := strings.Join(fullCmd, " ")
-	if response, exists := m.Responses[cmdStr]; exists {
-		return response.Stdout, response.Stderr, response.Err
+	// Check if any registered response matches the current command
+	for cmdStr, response := range m.Responses {
+		// Compare sorted slices
+		if m.compareSlicesContent(fullCmd, strings.Fields(cmdStr)) {
+			return response.Stdout, response.Stderr, response.Err
+		}
 	}
 
 	// Default behavior - return error as fence agent is not available in test environment
 	return "", "executable file not found in $PATH", errors.New("executable file not found in $PATH")
+}
+
+// compareSlicesContent compares two string slices for equality
+func (m *MockCommandExecutor) compareSlicesContent(slice1, slice2 []string) bool {
+
+	if len(slice1) != len(slice2) {
+		return false
+	}
+
+	sorted1, sorted2 := make([]string, len(slice1)), make([]string, len(slice2))
+	copy(sorted1, slice1)
+	sort.Strings(sorted1)
+
+	copy(sorted2, slice2)
+	sort.Strings(sorted2)
+
+	return slices.Equal(sorted1, sorted2)
+
 }
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
