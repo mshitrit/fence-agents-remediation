@@ -424,7 +424,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			// Should fail because "--ip" is defined in both NodeParameters and the secret
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR param"))
+			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR parameter"))
 		})
 
 		It("should test validateParametersWithStatus success scenario", func() {

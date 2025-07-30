@@ -44,7 +44,7 @@ const (
 	actionName                     = "action"
 	parameterActionName            = "--" + actionName
 	parameterActionStatusValue     = "status"
-	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param, param name: %s"
+	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	// Parameter validation constants shouldn't exceed 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
 	parameterValidationTimeout = 3 * time.Second
@@ -212,7 +212,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams map[stri
 		// Verify param isn't already defined
 		if existingParams[paramName] {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, paramName)
-			paramsLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+			paramsLog.Error(err, "can't build fence agents parameters a parameter is defined multiple times", "parameter name", paramName)
 			return nil, err
 		}
 		existingParams[paramName] = true
@@ -253,7 +253,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams map[stri
 		}
 		if existingParams[secretParam] {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, secretParam)
-			paramsLog.Error(err, "can't build fence agents params a param is defined multiple times", "param name", secretParam)
+			paramsLog.Error(err, "can't build fence agents parameters a parameter is defined multiple times", "parameter name", secretParam)
 			return nil, err
 		}
 		existingParams[secretParam] = true
