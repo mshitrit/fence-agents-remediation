@@ -56,7 +56,7 @@ var (
 	paramsLog = logf.Log.WithName("fenceagentsremediation-params")
 )
 
-// Extending the default 10 sec timeout to 13 per ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
+// Extending the default 10 sec timeout to 13 per ocp cap because we are running multiple status validation and want to take advantage of the maximum possible time (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
 // +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,timeoutSeconds=13,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
 type customValidator struct {
