@@ -196,13 +196,14 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
 }
 
 // validateFenceAgentParams builds the fence agent parameters map with validation
-func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams map[string]string) (map[ParameterName]string, error) {
+func validateFenceAgentParams(far *FenceAgentsRemediation, isNodeTemplateExistInSecretParams bool, secretParams map[string]string) (map[ParameterName]string, error) {
 	nodeName := GetNodeName(far)
 	fenceAgentParams := make(map[ParameterName]string)
 
 	// Track parameter names for uniqueness validation
 	existingParams := make(map[ParameterName]bool)
 
+	isNodeTemplateExistInSharedParams := false
 	// Validate and add shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		// Verify action must be reboot
@@ -222,6 +223,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams map[stri
 			paramsLog.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
 			return fenceAgentParams, err
 		}
+		isNodeTemplateExistInSharedParams = isNodeTemplateExistInSharedParams || paramVal != processedParamVal
 		fenceAgentParams[paramName] = processedParamVal
 	}
 
@@ -260,7 +262,9 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams map[stri
 		fenceAgentParams[secretParam] = secretVal
 	}
 
-	if len(fenceAgentParams) == 0 {
+	//TODO mshitrit add Unit Test for this use case
+	onlySharedParamsWithoutTemplate := len(far.Spec.NodeParameters) == 0 && !isNodeTemplateExistInSharedParams && !isNodeTemplateExistInSecretParams
+	if len(fenceAgentParams) == 0 || onlySharedParamsWithoutTemplate {
 		err := errors.New(errorMissingParams)
 		paramsLog.Error(err, "Missing parameters")
 		return nil, err
@@ -335,14 +339,14 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	paramsLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
 
 	nodeName := GetNodeName(far)
-	secretParams, err := collectRemediationSecretParams(ctx, k8sClient, far, nodeName)
+	secretParams, isNodeTemplateExistInSecretParams, err := collectRemediationSecretParams(ctx, k8sClient, far, nodeName)
 	if err != nil {
 		paramsLog.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
 		return nil, true, err
 	}
 
 	// Build the parameters map with validation included
-	fenceAgentParams, err := validateFenceAgentParams(far, secretParams)
+	fenceAgentParams, err := validateFenceAgentParams(far, isNodeTemplateExistInSecretParams, secretParams)
 	if err != nil {
 		return nil, false, err
 	}
@@ -370,12 +374,7 @@ func GetNodeName(far *FenceAgentsRemediation) string {
 }
 
 // collectRemediationSecretParams collects the parameters from the shared secret and the node secret
-func collectRemediationSecretParams(
-	ctx context.Context,
-	k8sClient client.Client,
-	far *FenceAgentsRemediation,
-	nodeName string,
-) (map[string]string, error) {
+func collectRemediationSecretParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation, nodeName string) (map[string]string, bool, error) {
 	paramsLog.Info("collectRemediationSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
 	var sharedSecretParams map[string]string
@@ -390,17 +389,19 @@ func collectRemediationSecretParams(
 	if sharedSecretName != nil {
 		sharedSecretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
-
+	isNodeTemplateExist := false
 	// Templating secret shared parameters
 	for paramName, paramVal := range sharedSecretParams {
 		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
+
 		if err != nil {
 			paramsLog.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
-			return secretParams, err
+			return secretParams, isNodeTemplateExist, err
 		}
+		isNodeTemplateExist = isNodeTemplateExist || processedParamVal != paramVal
 		secretParams[paramName] = processedParamVal
 	}
 
@@ -410,13 +411,13 @@ func collectRemediationSecretParams(
 	if isFound {
 		nodeSecretParams, err = collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
 		if err != nil {
-			return nil, err
+			return nil, isNodeTemplateExist, err
 		}
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
 		maps.Copy(secretParams, nodeSecretParams)
 	}
 	paramsLog.Info("collectRemediationSecretParams finish successfully for node", "node", nodeName)
-	return secretParams, nil
+	return secretParams, isNodeTemplateExist, nil
 }
 
 // collectSecretParams reads and adds the secret params if they are available
