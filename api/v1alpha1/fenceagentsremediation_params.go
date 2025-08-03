@@ -46,8 +46,9 @@ const (
 	parameterActionStatusValue     = "status"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	// Parameter validation constants shouldn't exceed 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
-	parameterValidationTimeout = 3 * time.Second
+	// statusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
+	// Overall time for all the validations shouldn't exceed the 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
+	statusValidationTimeout = 3 * time.Second
 )
 
 var (
@@ -291,7 +292,7 @@ func validateParametersWithStatus(agent string, parameters map[ParameterName]str
 	}
 
 	// Run the status command with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), parameterValidationTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), statusValidationTimeout)
 	defer cancel()
 
 	paramsLog.Info("Testing fence agent status command", "agent", agent, "command", command)
@@ -301,7 +302,7 @@ func validateParametersWithStatus(agent string, parameters map[ParameterName]str
 	if err != nil {
 		result.IsSuccessful = false
 		if ctx.Err() == context.DeadlineExceeded {
-			result.Message = fmt.Sprintf("status command timed out after %v", parameterValidationTimeout)
+			result.Message = fmt.Sprintf("status command timed out after %v", statusValidationTimeout)
 			paramsLog.Info("validateParametersWithStatus status command timed out", "result", result)
 			return result
 		}
