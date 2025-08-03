@@ -162,7 +162,7 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 
 		if !skipStatusValidation {
 			// Validate the complete parameter set with status command
-			result := validateParametersWithStatus(spec.Agent, completeParams, v.commandExecutor)
+			result := validateParametersWithStatus(ctx, spec.Agent, completeParams, v.commandExecutor)
 			if !result.IsSuccessful {
 				return warnings, fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
 			}
@@ -275,7 +275,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, isNodeTemplateExistIn
 }
 
 // validateParametersWithStatus validates fence agent parameters by running a status command
-func validateParametersWithStatus(agent string, parameters map[ParameterName]string, exec executor.CommandExecutor) *ParameterValidationResult {
+func validateParametersWithStatus(ctx context.Context, agent string, parameters map[ParameterName]string, exec executor.CommandExecutor) *ParameterValidationResult {
 	result := &ParameterValidationResult{
 		IsSuccessful: true,
 		Message:      "",
@@ -292,16 +292,16 @@ func validateParametersWithStatus(agent string, parameters map[ParameterName]str
 	}
 
 	// Run the status command with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), statusValidationTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, statusValidationTimeout)
 	defer cancel()
 
 	paramsLog.Info("Testing fence agent status command", "agent", agent, "command", command)
 
-	stdout, stderr, err := exec.RunCommand(ctx, command[0], command[1:]...)
+	stdout, stderr, err := exec.RunCommand(ctxWithTimeout, command[0], command[1:]...)
 
 	if err != nil {
 		result.IsSuccessful = false
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
 			result.Message = fmt.Sprintf("status command timed out after %v", statusValidationTimeout)
 			paramsLog.Info("validateParametersWithStatus status command timed out", "result", result)
 			return result
