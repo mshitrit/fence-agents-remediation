@@ -184,7 +184,7 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
 			nodeNamesMap[string(nodeName)] = true
 		}
 	}
-	for nodeName, _ := range spec.NodeSecretNames {
+	for nodeName := range spec.NodeSecretNames {
 		nodeNamesMap[string(nodeName)] = true
 	}
 
