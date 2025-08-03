@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,28 +32,6 @@ func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 
 	// When GetFunc is nil, call the underlying Client.Get
 	return m.Client.Get(ctx, key, obj, opts...)
-}
-
-// getFuncNodeSecretIpConflict returns the default Get function behavior for secrets
-func getFuncNodeSecretIpConflict() func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	return func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-		// Default behavior - Return a pre-built secret for testing duplicate parameters
-		if key.Name == "test-node-secret-ip-conflict" && key.Namespace == "test-namespace" {
-			if secret, ok := obj.(*corev1.Secret); ok {
-				secret.ObjectMeta = metav1.ObjectMeta{
-					Name:      "test-node-secret-ip-conflict",
-					Namespace: "test-namespace",
-				}
-				secret.Data = map[string][]byte{
-					"--ip":       []byte("192.168.1.100"), // This will conflict with NodeParameters
-					"--username": []byte("admin"),
-				}
-				return nil
-			}
-		}
-		// Return NotFound error for any other secret to simulate missing secrets
-		return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
-	}
 }
 
 // MockCommandExecutor for testing - implements executor.CommandExecutor
@@ -99,6 +78,28 @@ func (m *MockCommandExecutor) compareSlicesContent(slice1, slice2 []string) bool
 
 	return slices.Equal(sorted1, sorted2)
 
+}
+
+// getFuncNodeSecretIpConflict returns the default Get function behavior for secrets
+func getFuncNodeSecretIpConflict() func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	return func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+		// Default behavior - Return a pre-built secret for testing duplicate parameters
+		if key.Name == "test-node-secret-ip-conflict" && key.Namespace == "test-namespace" {
+			if secret, ok := obj.(*corev1.Secret); ok {
+				secret.ObjectMeta = metav1.ObjectMeta{
+					Name:      "test-node-secret-ip-conflict",
+					Namespace: "test-namespace",
+				}
+				secret.Data = map[string][]byte{
+					"--ip":       []byte("192.168.1.100"), // This will conflict with NodeParameters
+					"--username": []byte("admin"),
+				}
+				return nil
+			}
+		}
+		// Return NotFound error for any other secret to simulate missing secrets
+		return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+	}
 }
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
@@ -198,7 +199,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 							Spec: FenceAgentsRemediationSpec{
 								Agent:               validAgentName,
 								RemediationStrategy: ResourceDeletionRemediationStrategy,
-								SharedSecretName:    stringPtr("test-shared-secret-with-template"),
+								SharedSecretName:    ptr.To("test-shared-secret-with-template"),
 								// Explicitly ensure no node parameters or shared parameters
 								NodeParameters:   nil,
 								SharedParameters: nil,
@@ -670,9 +671,4 @@ func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAg
 			},
 		},
 	}
-}
-
-// stringPtr is a helper function to return a pointer to a string
-func stringPtr(s string) *string {
-	return &s
 }

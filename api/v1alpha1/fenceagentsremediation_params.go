@@ -263,7 +263,6 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, isNodeTemplateExistIn
 		fenceAgentParams[secretParam] = secretVal
 	}
 
-	//TODO mshitrit add Unit Test for this use case
 	onlySharedParamsWithoutTemplate := len(far.Spec.NodeParameters) == 0 && !isNodeTemplateExistInSharedParams && !isNodeTemplateExistInSecretParams
 	if len(fenceAgentParams) == 0 || onlySharedParamsWithoutTemplate {
 		err := errors.New(errorMissingParams)
