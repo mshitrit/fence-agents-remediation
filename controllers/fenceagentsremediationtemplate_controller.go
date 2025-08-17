@@ -44,6 +44,12 @@ type FenceAgentsRemediationTemplateReconciler struct {
 	Executor *cli.Executer
 }
 
+// ParameterValidationResult contains the results of parameter validation
+type ParameterValidationResult struct {
+	IsSuccessful bool
+	Message      string
+}
+
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates/finalizers,verbs=update
@@ -101,7 +107,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 		// Validate the complete parameter set with status command
 		result := r.validateParametersWithStatus(ctx, spec.Agent, completeParams)
-		r.proccessResult(result)
+		r.processResult(result)
 
 	}
 	return ctrl.Result{}, nil
@@ -115,8 +121,8 @@ func (r *FenceAgentsRemediationTemplateReconciler) SetupWithManager(mgr ctrl.Man
 }
 
 // validateParametersWithStatus validates fence agent parameters by running a status command
-func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(ctx context.Context, agent string, parameters map[v1alpha1.ParameterName]string) *v1alpha1.ParameterValidationResult {
-	result := &v1alpha1.ParameterValidationResult{
+func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(ctx context.Context, agent string, parameters map[v1alpha1.ParameterName]string) *ParameterValidationResult {
+	result := &ParameterValidationResult{
 		IsSuccessful: true,
 		Message:      "",
 	}
@@ -164,6 +170,6 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(
 }
 
 // TODO mshitrit implement - should update the status according to the result
-func (r *FenceAgentsRemediationTemplateReconciler) proccessResult(result *v1alpha1.ParameterValidationResult) {
+func (r *FenceAgentsRemediationTemplateReconciler) processResult(result *ParameterValidationResult) {
 
 }
