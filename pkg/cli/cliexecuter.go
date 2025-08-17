@@ -79,6 +79,16 @@ func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []st
 	go e.fenceAgentRoutine(cancellableCtx, uid, command, retryCount, retryInterval, timeout)
 }
 
+func (r *Executer) RunCommand(ctx context.Context, name string, args ...string) (string, string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var outBuilder, errBuilder strings.Builder
+	cmd.Stdout = &outBuilder
+	cmd.Stderr = &errBuilder
+
+	err := cmd.Run()
+	return outBuilder.String(), errBuilder.String(), err
+}
+
 func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) {
 	// run the command and update the status
 	retryErr, cmdErr := e.runWithRetry(ctx, uid, command, retryCount, retryInterval, timeout)

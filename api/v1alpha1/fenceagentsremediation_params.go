@@ -41,14 +41,14 @@ import (
 
 const (
 	parameterActionRebootValue     = "reboot"
-	actionName                     = "action"
-	parameterActionName            = "--" + actionName
-	parameterActionStatusValue     = "status"
+	ActionName                     = "action"
+	ParameterActionName            = "--" + ActionName
+	ParameterActionStatusValue     = "status"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	// statusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
+	// StatusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
 	// Overall time for all the validations shouldn't exceed the 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
-	statusValidationTimeout = 3 * time.Second
+	StatusValidationTimeout = 3 * time.Second
 )
 
 var (
@@ -132,7 +132,7 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	}
 
 	// Collect all unique node names from NodeParameters and NodeSecretNames
-	nodeNames := getNodeNamesFromSpec(spec)
+	nodeNames := GetNodeNamesFromSpec(spec)
 
 	skipStatusValidation := false
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
@@ -177,7 +177,7 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	return warnings, nil
 }
 
-func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
+func GetNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
 	nodeNamesMap := make(map[string]bool)
 	for _, nodeMap := range spec.NodeParameters {
 		for nodeName := range nodeMap {
@@ -281,17 +281,17 @@ func validateParametersWithStatus(ctx context.Context, agent string, parameters 
 	}
 
 	// Build command with status action
-	command := []string{agent, parameterActionName, parameterActionStatusValue}
+	command := []string{agent, ParameterActionName, ParameterActionStatusValue}
 
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
-		if string(paramName) != actionName && string(paramName) != parameterActionName {
+		if string(paramName) != ActionName && string(paramName) != ParameterActionName {
 			command = append(command, string(paramName), paramValue)
 		}
 	}
 
 	// Run the status command with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, statusValidationTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, StatusValidationTimeout)
 	defer cancel()
 
 	paramsLog.Info("Testing fence agent status command", "agent", agent, "command", command)
@@ -301,7 +301,7 @@ func validateParametersWithStatus(ctx context.Context, agent string, parameters 
 	if err != nil {
 		result.IsSuccessful = false
 		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
-			result.Message = fmt.Sprintf("status command timed out after %v", statusValidationTimeout)
+			result.Message = fmt.Sprintf("status command timed out after %v", StatusValidationTimeout)
 			paramsLog.Info("validateParametersWithStatus status command timed out", "result", result)
 			return result
 		}
@@ -324,7 +324,7 @@ func validateParametersWithStatus(ctx context.Context, agent string, parameters 
 
 // validateActionParameter validates that action parameters are set correctly
 func validateActionParameter(paramName, paramVal string) error {
-	if (paramName == actionName || paramName == parameterActionName) && paramVal != "" && paramVal != parameterActionRebootValue {
+	if (paramName == ActionName || paramName == ParameterActionName) && paramVal != "" && paramVal != parameterActionRebootValue {
 		// --action parameter with a different value from reboot is not supported
 		err := fmt.Errorf("FAR doesn't support any other action than reboot")
 		paramsLog.Error(err, "can't build CR with this action attribute", "action", paramVal)
@@ -352,9 +352,9 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParams[parameterActionName]; !exist {
+	if _, exist := fenceAgentParams[ParameterActionName]; !exist {
 		paramsLog.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[parameterActionName] = parameterActionRebootValue
+		fenceAgentParams[ParameterActionName] = parameterActionRebootValue
 	}
 
 	paramsLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
