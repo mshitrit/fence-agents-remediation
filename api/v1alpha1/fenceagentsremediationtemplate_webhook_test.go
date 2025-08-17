@@ -112,8 +112,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		}
 
 		validator = &customValidator{
-			Client:          mockValidatorClient,
-			commandExecutor: mockCommandExecutor,
+			Client: mockValidatorClient,
 		}
 		ctx = context.Background()
 	)
