@@ -20,18 +20,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 
 	"github.com/go-logr/logr"
 
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 // FenceAgentsRemediationTemplateReconciler reconciles a FenceAgentsRemediationTemplate object

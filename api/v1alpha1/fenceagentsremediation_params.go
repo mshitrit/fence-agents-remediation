@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"strings"
 	"time"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
@@ -134,13 +133,10 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	// Collect all unique node names from NodeParameters and NodeSecretNames
 	nodeNames := GetNodeNamesFromSpec(spec)
 
-	skipStatusValidation := false
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
 		paramsLog.Info("validateFenceAgentTemplate no nodes found")
 		nodeNames = append(nodeNames, "temp-validation")
-		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
-		skipStatusValidation = true
 	}
 	// Validate parameters for each node mentioned in NodeParameters
 	for _, nodeName := range nodeNames {
@@ -154,25 +150,12 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 		}
 
 		// BuildFenceAgentParams handles secret collection and validation internally
-		completeParams, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
+		_, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
 		if err != nil {
 			// If BuildFenceAgentParams fails, return the validation error
 			return warnings, err
 		}
 
-		if !skipStatusValidation {
-			// Validate the complete parameter set with status command
-			result := validateParametersWithStatus(ctx, spec.Agent, completeParams, v.commandExecutor)
-			if !result.IsSuccessful {
-				return warnings, fmt.Errorf("fence agent parameter validation failed: %s", result.Message)
-			}
-			// Check if successful but has a warning message
-			if result.IsSuccessful && result.Message != "" {
-				warning := fmt.Sprintf("fence agent parameter validation succeeded with warning for node %s: %s", nodeName, result.Message)
-				warnings = append(warnings, warning)
-				paramsLog.Info("validateFenceAgentTemplate warning", "node", nodeName, "warning", warning)
-			}
-		}
 	}
 	return warnings, nil
 }
@@ -271,55 +254,6 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, isNodeTemplateExistIn
 	}
 
 	return fenceAgentParams, nil
-}
-
-// validateParametersWithStatus validates fence agent parameters by running a status command
-func validateParametersWithStatus(ctx context.Context, agent string, parameters map[ParameterName]string, exec executor.CommandExecutor) *ParameterValidationResult {
-	result := &ParameterValidationResult{
-		IsSuccessful: true,
-		Message:      "",
-	}
-
-	// Build command with status action
-	command := []string{agent, ParameterActionName, ParameterActionStatusValue}
-
-	// Add parameters (excluding action parameters to avoid conflicts)
-	for paramName, paramValue := range parameters {
-		if string(paramName) != ActionName && string(paramName) != ParameterActionName {
-			command = append(command, string(paramName), paramValue)
-		}
-	}
-
-	// Run the status command with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, StatusValidationTimeout)
-	defer cancel()
-
-	paramsLog.Info("Testing fence agent status command", "agent", agent, "command", command)
-
-	stdout, stderr, err := exec.RunCommand(ctxWithTimeout, command[0], command[1:]...)
-
-	if err != nil {
-		result.IsSuccessful = false
-		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
-			result.Message = fmt.Sprintf("status command timed out after %v", StatusValidationTimeout)
-			paramsLog.Info("validateParametersWithStatus status command timed out", "result", result)
-			return result
-		}
-
-		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout)
-		paramsLog.Info("validateParametersWithStatus status command failed", "result", result)
-		return result
-	}
-
-	// Command completed successfully, now check if stdout contains "Status: ON"
-	if strings.Contains(stdout, "Status: ON") {
-		paramsLog.Info("Fence agent status command succeeded with Status: ON", "agent", agent, "stdout", stdout)
-	} else {
-		result.Message = fmt.Sprintf("fence agent command completed but status is not ON (stdout: %s, stderr: %s)", stdout, stderr)
-		paramsLog.Info("Fence agent status command completed but status not ON", "agent", agent, "stdout", stdout, "stderr", stderr)
-	}
-
-	return result
 }
 
 // validateActionParameter validates that action parameters are set correctly
