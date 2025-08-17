@@ -39,8 +39,16 @@ type FenceAgentsRemediationTemplateSpec struct {
 
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Represents the observations of a FenceAgentsRemediationTemplate's current state.
+	// Known .status.conditions.type: "ParametersValidated".
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ValidationFailures maps node name to the validation failure message.
+	// +optional
+	ValidationFailures map[string]string `json:"validationFailures,omitempty"`
 }
 
 // +kubebuilder:object:root=true

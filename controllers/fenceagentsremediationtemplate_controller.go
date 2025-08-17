@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -49,6 +50,14 @@ type ParameterValidationResult struct {
 	IsSuccessful bool
 	Message      string
 }
+
+const (
+	ConditionParametersValidation = "ParametersValidation"
+
+	ReasonValidationInProgress = "ValidationInProgress"
+	ReasonValidationSucceeded  = "ValidationSucceeded"
+	ReasonValidationFailed     = "ValidationFailed"
+)
 
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates/status,verbs=get;update;patch
@@ -87,6 +96,24 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 		return ctrl.Result{}, nil
 	}
 
+	if fart.Status.ValidationFailures == nil {
+		fart.Status.ValidationFailures = make(map[string]string)
+	}
+
+	original := fart.DeepCopy()
+	meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
+		Type:               ConditionParametersValidation,
+		Status:             metav1.ConditionUnknown,
+		Reason:             ReasonValidationInProgress,
+		Message:            fmt.Sprintf("validating parameters for %d node(s)", len(nodeNames)),
+		ObservedGeneration: fart.GetGeneration(),
+	})
+	if err := r.Status().Patch(ctx, fart, client.MergeFrom(original)); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	original = fart.DeepCopy()
+
 	// Validate parameters for each node mentioned in NodeParameters
 	for _, nodeName := range nodeNames {
 		// Generate a temporary FAR CR from the template for this specific node
@@ -107,9 +134,34 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 		// Validate the complete parameter set with status command
 		result := r.validateParametersWithStatus(ctx, spec.Agent, completeParams)
-		r.processResult(result)
-
+		if result.IsSuccessful {
+			delete(fart.Status.ValidationFailures, nodeName)
+		} else {
+			fart.Status.ValidationFailures[nodeName] = result.Message
+		}
 	}
+
+	if len(fart.Status.ValidationFailures) == 0 {
+		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
+			Type:               ConditionParametersValidation,
+			Status:             metav1.ConditionTrue,
+			Reason:             ReasonValidationSucceeded,
+			Message:            "parameters validation succeeded",
+			ObservedGeneration: fart.GetGeneration(),
+		})
+	} else {
+		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
+			Type:               ConditionParametersValidation,
+			Status:             metav1.ConditionFalse,
+			Reason:             ReasonValidationFailed,
+			Message:            fmt.Sprintf("parameters validation failed for %d node(s)", len(fart.Status.ValidationFailures)),
+			ObservedGeneration: fart.GetGeneration(),
+		})
+	}
+	if err := r.Status().Patch(ctx, fart, client.MergeFrom(original)); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -167,9 +219,4 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(
 	}
 
 	return result
-}
-
-// TODO mshitrit implement - should update the status according to the result
-func (r *FenceAgentsRemediationTemplateReconciler) processResult(result *ParameterValidationResult) {
-
 }
