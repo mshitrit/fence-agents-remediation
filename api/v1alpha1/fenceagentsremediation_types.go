@@ -111,6 +111,8 @@ type FenceAgentsRemediationSpec struct {
 	// +kubebuilder:validation:Type=string
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedSecretName *string `json:"sharedSecretName,omitempty"`
+
+	//TODO mshitrit add status check config
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation

@@ -131,6 +131,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 			// If BuildFenceAgentParams fails, return the validation error
 			return ctrl.Result{}, err
 		}
+		//TODO mshitrit make each one a separate reconcile
 
 		// Validate the complete parameter set with status command
 		result := r.validateParametersWithStatus(ctx, spec.Agent, completeParams)
