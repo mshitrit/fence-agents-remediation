@@ -149,6 +149,21 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
+	// Register the Template reconciler with a fake executor that always returns Status: ON
+	templateRunner := func(ctx context.Context, command []string) (string, string, error) {
+		return "Status: ON\n", "", nil
+	}
+
+	templateExecutor := cli.NewFakeExecuter(k8sClient, templateRunner, fakeRecorder)
+	err = (&FenceAgentsRemediationTemplateReconciler{
+		Client:   k8sClient,
+		Log:      k8sManager.GetLogger().WithName("test fart reconciler"),
+		Scheme:   k8sManager.GetScheme(),
+		Recorder: fakeRecorder,
+		Executor: templateExecutor,
+	}).SetupWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+
 	go func() {
 		// https://github.com/kubernetes-sigs/controller-runtime/issues/1571
 		ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
