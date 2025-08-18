@@ -49,6 +49,10 @@ type FenceAgentsRemediationTemplateStatus struct {
 	// ValidationFailures maps node name to the validation failure message.
 	// +optional
 	ValidationFailures map[string]string `json:"validationFailures,omitempty"`
+
+	// ValidationPassed marks nodes that have passed validation in the current round.
+	// +optional
+	ValidationPassed map[string]string `json:"validationPassed,omitempty"`
 }
 
 // +kubebuilder:object:root=true
