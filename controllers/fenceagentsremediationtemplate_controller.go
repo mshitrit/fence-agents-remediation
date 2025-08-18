@@ -195,7 +195,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(
 
 	r.Log.Info("Testing fence agent status command", "agent", agent, "command", command)
 
-	stdout, stderr, err := r.Executor.RunCommand(ctxWithTimeout, command[0], command[1:]...)
+	stdout, stderr, _, err := r.Executor.SyncExecute(ctx, command, 0, 0, v1alpha1.StatusValidationTimeout)
 
 	if err != nil {
 		result.IsSuccessful = false
