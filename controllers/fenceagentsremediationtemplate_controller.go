@@ -114,9 +114,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 	// If condition is not in progress and not finished for this generation, start a round
 	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
-	if cond == nil || cond.ObservedGeneration != fart.GetGeneration() || (cond.Status != metav1.ConditionUnknown && len(fart.Status.ValidationFailures) == 0) {
-		fart.Status.ValidationFailures = map[string]string{}
-		fart.Status.ValidationPassed = map[string]string{}
+	if cond == nil || cond.Reason != ReasonValidationInProgress {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
 			Type:               ConditionParametersValidation,
 			Status:             metav1.ConditionUnknown,
@@ -124,7 +122,14 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 			Message:            fmt.Sprintf("validating parameters for %d node(s)", len(nodeNames)),
 			ObservedGeneration: fart.GetGeneration(),
 		})
-		return ctrl.Result{Requeue: true}, nil
+	}
+
+	if fart.Status.ValidationFailures == nil {
+		fart.Status.ValidationFailures = map[string]string{}
+	}
+
+	if fart.Status.ValidationPassed == nil {
+		fart.Status.ValidationPassed = map[string]string{}
 	}
 
 	// Pick next node: first not present in ValidationFailures map

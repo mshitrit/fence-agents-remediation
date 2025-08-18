@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,7 +28,7 @@ import (
 )
 
 var _ = Describe("FART Controller", func() {
-	FIt("sets ParametersValidation=True and no validation failures on happy flow", func() {
+	It("sets ParametersValidation=True and no validation failures on happy flow", func() {
 		fart := &v1alpha1.FenceAgentsRemediationTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "tmpl-happy",
@@ -53,10 +52,6 @@ var _ = Describe("FART Controller", func() {
 
 		Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), fart) })
-
-		for i := 0; i < 10; i++ {
-			time.Sleep(time.Second)
-		}
 
 		Eventually(func(g Gomega) {
 			updated := &v1alpha1.FenceAgentsRemediationTemplate{}
