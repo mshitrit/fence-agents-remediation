@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 var _ = Describe("FART Controller", func() {
@@ -43,7 +44,7 @@ var _ = Describe("FART Controller", func() {
 							"--password": "password",
 						},
 						NodeParameters: map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
-							"--ip": {v1alpha1.NodeName("worker-1"): "192.168.1.100"},
+							"--ip": {v1alpha1.NodeName("worker-1"): cli.SuccessfulStatusCheckIp},
 						},
 					},
 				},
@@ -82,9 +83,9 @@ var _ = Describe("FART Controller", func() {
 						},
 						NodeParameters: map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
 							"--ip": {
-								v1alpha1.NodeName("worker-1"): "192.168.1.100", // success
-								v1alpha1.NodeName("worker-2"): "192.168.1.101", // timeout
-								v1alpha1.NodeName("worker-3"): "192.168.1.102", // non-ON
+								v1alpha1.NodeName("worker-1"): cli.SuccessfulStatusCheckIp, // success
+								v1alpha1.NodeName("worker-2"): cli.TimedOutStatusCheckIp,   // timeout
+								v1alpha1.NodeName("worker-3"): cli.OffStatusCheckIp,        // not-ON
 							},
 						},
 					},

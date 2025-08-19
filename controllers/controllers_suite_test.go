@@ -149,39 +149,7 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Register the Template reconciler with a fake executor that always returns Status: ON
-	templateRunner := func(ctx context.Context, command []string) (string, string, error) {
-		// Extract IP if present: look for "--ip" flag and take the next argument
-		ip := ""
-		for i := 0; i < len(command); i++ {
-			if command[i] == "--ip" && i+1 < len(command) {
-				ip = command[i+1]
-				break
-			}
-		}
-
-		// Decide behavior based on IP
-		switch ip {
-		case "192.168.1.100":
-			// success
-			return "Status: ON\n", "", nil
-		case "192.168.1.101":
-			// emulate timeout by waiting for context cancellation
-			select {
-			case <-ctx.Done():
-				return "", "", ctx.Err()
-			}
-		case "192.168.1.102":
-			// non-ON result
-			return "Status: OFF\n", "", nil
-		default:
-			// default to success to keep other tests green
-			return "Status: ON\n", "", nil
-		}
-		return "Status: ON\n", "", nil
-	}
-
-	templateExecutor := cli.NewFakeExecuter(k8sClient, templateRunner, fakeRecorder)
+	templateExecutor := cli.NewFakeExecuter(k8sClient, cli.ControlTemplateRunner, fakeRecorder)
 	err = (&FenceAgentsRemediationTemplateReconciler{
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test fart reconciler"),
