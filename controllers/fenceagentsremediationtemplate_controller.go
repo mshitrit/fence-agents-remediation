@@ -101,6 +101,11 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 		}
 	}()
 
+	return r.validateTemplate(ctx, req, fart)
+}
+
+// validateTemplate contains the template validation logic (extracted from Reconcile)
+func (r *FenceAgentsRemediationTemplateReconciler) validateTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
 	spec := &fart.Spec.Template.Spec
 	// Collect all unique node names from NodeParameters and NodeSecretNames
 	nodeNames := v1alpha1.GetNodeNamesFromSpec(spec)
