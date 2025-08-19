@@ -133,14 +133,11 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 	}
 
 	// Pick next node: first not present in ValidationFailures map
-	processedCount := 0
 	for _, n := range nodeNames {
 		if _, done := fart.Status.ValidationFailures[n]; done {
-			processedCount++
 			continue
 		}
 		if _, done := fart.Status.ValidationPassed[n]; done {
-			processedCount++
 			continue
 		}
 		// process this node
