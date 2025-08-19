@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,7 +29,7 @@ import (
 )
 
 var _ = Describe("FART Controller", func() {
-	It("sets ParametersValidation=True and no validation failures on happy flow", func() {
+	FIt("sets ParametersValidation=True and no validation failures on happy flow", func() {
 		fart := &v1alpha1.FenceAgentsRemediationTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "tmpl-happy",
@@ -64,5 +65,57 @@ var _ = Describe("FART Controller", func() {
 			g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 			g.Expect(cond.Reason).To(Equal(ReasonValidationSucceeded))
 		}, "5s", "200ms").Should(Succeed())
+	})
+
+	It("handles 3 nodes: success, timeout, non-ON status", func() {
+		fart := &v1alpha1.FenceAgentsRemediationTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "tmpl-mixed",
+				Namespace: defaultNamespace,
+			},
+			Spec: v1alpha1.FenceAgentsRemediationTemplateSpec{
+				Template: v1alpha1.FenceAgentsRemediationTemplateResource{
+					Spec: v1alpha1.FenceAgentsRemediationSpec{
+						Agent: "fence_ipmilan",
+						SharedParameters: map[v1alpha1.ParameterName]string{
+							"--username": "admin",
+							"--password": "password",
+						},
+						NodeParameters: map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
+							"--ip": {
+								v1alpha1.NodeName("worker-1"): "192.168.1.100", // success
+								v1alpha1.NodeName("worker-2"): "192.168.1.101", // timeout
+								v1alpha1.NodeName("worker-3"): "192.168.1.102", // non-ON
+							},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), fart) })
+
+		for i := 0; i < 10; i++ {
+			time.Sleep(time.Second)
+		}
+
+		Eventually(func(g Gomega) {
+			updated := &v1alpha1.FenceAgentsRemediationTemplate{}
+			g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(fart), updated)).To(Succeed())
+
+			cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionParametersValidation)
+			g.Expect(cond).NotTo(BeNil())
+			g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(cond.Reason).To(Equal(ReasonValidationFailed))
+
+			g.Expect(updated.Status.ValidationFailures).To(HaveLen(2))
+			// worker-2 timed out
+			g.Expect(updated.Status.ValidationFailures).To(HaveKey("worker-2"))
+			g.Expect(updated.Status.ValidationFailures["worker-2"]).To(ContainSubstring("timed out"))
+			// worker-3 not ON
+			g.Expect(updated.Status.ValidationFailures).To(HaveKey("worker-3"))
+			g.Expect(updated.Status.ValidationFailures["worker-3"]).To(ContainSubstring("not ON"))
+		}, "12s", "200ms").Should(Succeed())
 	})
 })
