@@ -200,7 +200,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) SetupWithManager(mgr ctrl.Man
 // validateParametersWithStatus validates fence agent parameters by running a status command
 func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(ctx context.Context, agent string, parameters map[v1alpha1.ParameterName]string) *ParameterValidationResult {
 	result := &ParameterValidationResult{
-		IsSuccessful: true,
+		IsSuccessful: false,
 		Message:      "",
 	}
 
@@ -223,7 +223,6 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(
 	stdout, stderr, _, err := r.Executor.SyncExecute(ctx, command, 0, 0, v1alpha1.StatusValidationTimeout)
 
 	if err != nil {
-		result.IsSuccessful = false
 		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
 			result.Message = fmt.Sprintf("status command timed out after %v", v1alpha1.StatusValidationTimeout)
 			r.Log.Info("validateParametersWithStatus status command timed out", "result", result)
@@ -237,12 +236,12 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(
 
 	// Command completed successfully, now check if stdout contains "Status: ON"
 	if strings.Contains(stdout, "Status: ON") {
+		result.IsSuccessful = true
 		r.Log.Info("Fence agent status command succeeded with Status: ON", "agent", agent, "stdout", stdout)
-	} else {
-		//TODO mshitrit change this to failed status
-		result.Message = fmt.Sprintf("fence agent command completed but status is not ON (stdout: %s, stderr: %s)", stdout, stderr)
-		r.Log.Info("Fence agent status command completed but status not ON", "agent", agent, "stdout", stdout, "stderr", stderr)
+		return result
 	}
 
+	result.Message = fmt.Sprintf("fence agent command completed but status is not ON (stdout: %s, stderr: %s)", stdout, stderr)
+	r.Log.Info("Fence agent status command completed but status not ON", "agent", agent, "stdout", stdout, "stderr", stderr)
 	return result
 }
