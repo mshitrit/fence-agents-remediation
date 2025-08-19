@@ -101,6 +101,17 @@ spec:
                 description: Timeout is the timeout for each fencing agent execution
                 pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
                 type: string
+              validationSample:
+                anyOf:
+                - type: integer
+                - type: string
+                default: 100%
+                description: |-
+                  StatusValidationSample configures how many nodes the status validation should run for.
+                  Accepts an absolute number (e.g., 3), a percentage string (e.g., "60%"), or -1 for all nodes.
+                  Optional; defaults to 100% (all nodes).
+                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                x-kubernetes-int-or-string: true
             required:
             - agent
             type: object

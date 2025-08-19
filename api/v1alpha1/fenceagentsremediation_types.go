@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -112,7 +113,15 @@ type FenceAgentsRemediationSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedSecretName *string `json:"sharedSecretName,omitempty"`
 
-	//TODO mshitrit add status check config
+	// StatusValidationSample configures how many nodes the status validation should run for.
+	// Accepts an absolute number (e.g., 3), a percentage string (e.g., "60%"), or -1 for all nodes.
+	// Optional; defaults to 100% (all nodes).
+	// +optional
+	// +kubebuilder:default:="100%"
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	StatusValidationSample *intstr.IntOrString `json:"validationSample,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation
