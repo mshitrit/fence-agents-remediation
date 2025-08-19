@@ -16,10 +16,9 @@ package controllers
 
 import (
 	"context"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,6 +52,10 @@ var _ = Describe("FART Controller", func() {
 
 		Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), fart) })
+
+		for i := 0; i < 10; i++ {
+			time.Sleep(time.Second)
+		}
 
 		Eventually(func(g Gomega) {
 			updated := &v1alpha1.FenceAgentsRemediationTemplate{}
@@ -95,10 +98,6 @@ var _ = Describe("FART Controller", func() {
 
 		Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), fart) })
-
-		for i := 0; i < 10; i++ {
-			time.Sleep(time.Second)
-		}
 
 		Eventually(func(g Gomega) {
 			updated := &v1alpha1.FenceAgentsRemediationTemplate{}
