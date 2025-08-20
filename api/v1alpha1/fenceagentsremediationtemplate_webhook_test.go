@@ -106,10 +106,6 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 	var (
 		mockValidatorClient = &mockClient{}
-		mockCommandExecutor = &MockCommandExecutor{
-			Commands:  [][]string{},
-			Responses: make(map[string]MockResponse),
-		}
 
 		validator = &customValidator{
 			Client: mockValidatorClient,
@@ -417,9 +413,6 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 	Context("validating parameter validation functionality", func() {
 		BeforeEach(func() {
-			// Reset mock state before each test
-			mockCommandExecutor.Commands = [][]string{}
-			mockCommandExecutor.Responses = make(map[string]MockResponse)
 			// Set up default secret behavior for tests that need it
 			mockValidatorClient.GetFunc = getFuncNodeSecretIpConflict()
 		})
