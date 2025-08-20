@@ -61,6 +61,12 @@ type customValidator struct {
 	client.Client
 }
 
+// ParameterValidationResult contains the results of parameter validation
+type ParameterValidationResult struct {
+	IsSuccessful bool
+	Message      string
+}
+
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validate(ctx, obj)
@@ -76,25 +82,20 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 	paramsLog.Info("validate update", "name", r.Name)
 
 	var allErrors []error
-	var allWarnings []string
 
 	// First, run the existing FAR validation logic
 	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
 	if validateFarErr != nil {
 		allErrors = append(allErrors, validateFarErr)
 	}
-	// Add validateFAR warnings
-	allWarnings = append(allWarnings, validateWarnings...)
 
 	// Perform enhanced parameter validation with secret collection
-	warnings, err := v.validateFenceAgentTemplate(ctx, r)
+	err := v.validateFenceAgentTemplate(ctx, r)
 	if err != nil {
 		allErrors = append(allErrors, err)
 	}
-	// Add parameter validation warnings
-	allWarnings = append(allWarnings, warnings...)
 
-	return allWarnings, utilErrors.NewAggregate(allErrors)
+	return validateWarnings, utilErrors.NewAggregate(allErrors)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -106,8 +107,7 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 
 // validateFenceAgentTemplate validates fence agent parameters for templates
 // by creating temporary FAR CRs and using BuildFenceAgentParams + validateParametersWithStatus
-func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *FenceAgentsRemediationTemplate) ([]string, error) {
-	var warnings []string
+func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *FenceAgentsRemediationTemplate) error {
 	spec := &r.Spec.Template.Spec
 
 	// Check if template has any parameters at all
@@ -119,7 +119,7 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	if !hasSharedParams && !hasNodeParams && !hasSecrets {
 		err := errors.New(errorMissingParams)
 		paramsLog.Error(err, "Missing parameters")
-		return nil, err
+		return err
 	}
 
 	// Collect all unique node names from NodeParameters and NodeSecretNames
@@ -145,11 +145,10 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 		_, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
 		if err != nil {
 			// If BuildFenceAgentParams fails, return the validation error
-			return warnings, err
+			return err
 		}
-
 	}
-	return warnings, nil
+	return nil
 }
 
 func GetNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
