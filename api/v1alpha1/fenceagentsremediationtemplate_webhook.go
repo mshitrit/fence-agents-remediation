@@ -22,8 +22,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/executor"
 )
 
 var (
@@ -35,8 +33,7 @@ func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr c
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(farTemplate).
 		WithValidator(&customValidator{
-			Client:          mgr.GetClient(),
-			commandExecutor: &executor.RealCommandExecutor{},
+			Client: mgr.GetClient(),
 		}).
 		Complete()
 }

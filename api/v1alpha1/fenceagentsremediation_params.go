@@ -34,7 +34,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/medik8s/fence-agents-remediation/pkg/executor"
 	"github.com/medik8s/fence-agents-remediation/pkg/template"
 )
 
@@ -60,7 +59,6 @@ var (
 
 type customValidator struct {
 	client.Client
-	commandExecutor executor.CommandExecutor
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
