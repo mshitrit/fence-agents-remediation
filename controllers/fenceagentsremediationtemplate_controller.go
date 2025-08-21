@@ -101,11 +101,11 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 		}
 	}()
 
-	return r.validateTemplate(ctx, req, fart)
+	return r.validateFenceStatusForTemplate(ctx, req, fart)
 }
 
-// validateTemplate contains the template validation logic (extracted from Reconcile)
-func (r *FenceAgentsRemediationTemplateReconciler) validateTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
+// validateFenceStatusForTemplate contains the template validation logic (extracted from Reconcile)
+func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
 	spec := &fart.Spec.Template.Spec
 	// Collect all unique node names from NodeParameters and NodeSecretNames
 	nodeNames := v1alpha1.GetNodeNamesFromSpec(spec)
@@ -117,7 +117,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateTemplate(ctx context.
 	}
 	sort.Strings(nodeNames)
 
-	// If condition is not in progress and not finished for this generation, start a round
+	// If condition is not in progress, start a round
 	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
 	if cond == nil || cond.Reason != ReasonValidationInProgress {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
@@ -156,7 +156,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateTemplate(ctx context.
 			return ctrl.Result{Requeue: true}, nil
 		}
 
-		res := r.validateParametersWithStatus(ctx, spec.Agent, params)
+		res := r.runFenceStatus(ctx, spec.Agent, params)
 		if res.IsSuccessful {
 			fart.Status.ValidationPassed[n] = successMarker
 		} else {
@@ -199,8 +199,8 @@ func (r *FenceAgentsRemediationTemplateReconciler) SetupWithManager(mgr ctrl.Man
 		Complete(r)
 }
 
-// validateParametersWithStatus validates fence agent parameters by running a status command
-func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(ctx context.Context, agent string, parameters map[v1alpha1.ParameterName]string) *ParameterValidationResult {
+// runFenceStatus validates fence agent parameters by running a status command
+func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Context, agent string, parameters map[v1alpha1.ParameterName]string) *ParameterValidationResult {
 	result := &ParameterValidationResult{
 		IsSuccessful: false,
 		Message:      "",
@@ -227,12 +227,12 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateParametersWithStatus(
 	if err != nil {
 		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
 			result.Message = fmt.Sprintf("status command timed out after %v", v1alpha1.StatusValidationTimeout)
-			r.Log.Info("validateParametersWithStatus status command timed out", "result", result)
+			r.Log.Info("runFenceStatus status command timed out", "result", result)
 			return result
 		}
 
 		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout)
-		r.Log.Info("validateParametersWithStatus status command failed", "result", result)
+		r.Log.Info("runFenceStatus status command failed", "result", result)
 		return result
 	}
 
