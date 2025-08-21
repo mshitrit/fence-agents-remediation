@@ -61,12 +61,6 @@ type customValidator struct {
 	client.Client
 }
 
-// ParameterValidationResult contains the results of parameter validation
-type ParameterValidationResult struct {
-	IsSuccessful bool
-	Message      string
-}
-
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validate(ctx, obj)
