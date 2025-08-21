@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilErrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -107,24 +108,37 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 // validateFenceStatusForTemplate contains the template validation logic (extracted from Reconcile)
 func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
 	spec := &fart.Spec.Template.Spec
-	// Collect all unique node names from NodeParameters and NodeSecretNames
 	nodeNames := v1alpha1.GetNodeNamesFromSpec(spec)
-
-	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
 		r.Log.Info("status validation skipped, no nodes found")
 		return ctrl.Result{}, nil
 	}
 	sort.Strings(nodeNames)
 
-	// If condition is not in progress, start a round
+	// Determine sampled nodes (optional) via spec.StatusValidationSample
+	size, sampleErr := calculateSampleSize(len(nodeNames), spec.StatusValidationSample)
+	if sampleErr != nil {
+		r.Log.Error(sampleErr, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", spec.StatusValidationSample)
+		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
+			Type:               ConditionParametersValidation,
+			Status:             metav1.ConditionFalse,
+			Reason:             ReasonValidationFailed,
+			Message:            fmt.Sprintf("parameters validation failed invalid value of StatusValidationSample: %s", spec.StatusValidationSample),
+			ObservedGeneration: fart.GetGeneration(),
+		})
+		// Configuration issue so no point to return an error
+		return ctrl.Result{}, nil
+	}
+
+	selectedNodes := nodeNames[:size]
+
 	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
 	if cond == nil || cond.Reason != ReasonValidationInProgress {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
 			Type:               ConditionParametersValidation,
 			Status:             metav1.ConditionUnknown,
 			Reason:             ReasonValidationInProgress,
-			Message:            fmt.Sprintf("validating parameters for %d node(s)", len(nodeNames)),
+			Message:            fmt.Sprintf("validating parameters for %d node(s)", len(selectedNodes)),
 			ObservedGeneration: fart.GetGeneration(),
 		})
 	}
@@ -132,20 +146,17 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	if fart.Status.ValidationFailures == nil {
 		fart.Status.ValidationFailures = map[string]string{}
 	}
-
 	if fart.Status.ValidationPassed == nil {
 		fart.Status.ValidationPassed = map[string]string{}
 	}
 
-	// Pick next node: first not present in ValidationFailures map
-	for _, n := range nodeNames {
+	for _, n := range selectedNodes {
 		if _, done := fart.Status.ValidationFailures[n]; done {
 			continue
 		}
 		if _, done := fart.Status.ValidationPassed[n]; done {
 			continue
 		}
-		// process this node
 		tempFAR := &v1alpha1.FenceAgentsRemediation{
 			ObjectMeta: metav1.ObjectMeta{Name: n, Namespace: req.Namespace},
 			Spec:       *spec,
@@ -162,15 +173,12 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		} else {
 			fart.Status.ValidationFailures[n] = res.Message
 		}
-
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// All nodes processed, finalize
-	// clear success list
+	// All selected nodes processed, finalize
 	fart.Status.ValidationPassed = map[string]string{}
 	allOK := len(fart.Status.ValidationFailures) == 0
-
 	if allOK {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
 			Type:               ConditionParametersValidation,
@@ -188,8 +196,27 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 			ObservedGeneration: fart.GetGeneration(),
 		})
 	}
-
 	return ctrl.Result{}, nil
+}
+
+func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
+	if sample == nil || total == 0 {
+		return total, nil
+	}
+	// Treat -1 or lower (int) as all
+	if sample.Type == intstr.Int && sample.IntVal < 0 {
+		return total, nil
+	}
+	// Use k8s helper to scale int-or-percent
+	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, total, true)
+	if err != nil {
+		return 0, err
+	}
+	if scaled < 0 || scaled > total {
+		return 0, fmt.Errorf("invalid value for StatusValidationSample: %s", sample)
+	}
+
+	return scaled, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
