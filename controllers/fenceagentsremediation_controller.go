@@ -190,6 +190,9 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		faParams, isRetryRequired, err := v1alpha1.BuildFenceAgentParams(ctx, r.Client, far)
 		if err != nil {
 			if !isRetryRequired {
+				if err.Error() == v1alpha1.ErrorUnsupportedAction {
+					commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrUnsupportedAction, utils.EventMessageCrUnsupportedAction)
+				}
 				return emptyResult, nil
 			}
 			return emptyResult, err

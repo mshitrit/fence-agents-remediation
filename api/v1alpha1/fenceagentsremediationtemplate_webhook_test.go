@@ -255,11 +255,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			It("should be rejected", func() {
 				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
-					"action": "off", // Invalid action
+					"action": "shutdown", // Invalid action
 				}
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
-				Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot")))
+				Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot or off")))
 			})
 		})
 
@@ -379,7 +379,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 							Agent: validAgentName,
 							SharedParameters: map[ParameterName]string{
 								"--ip":     "192.168.1.100",
-								"--action": "off", // Invalid action - only "reboot" is supported
+								"--action": "shutdown", // Invalid action - only "reboot" or "off" are supported
 							},
 						},
 					},

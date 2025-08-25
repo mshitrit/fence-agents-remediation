@@ -27,23 +27,24 @@ import (
 )
 
 const (
-	fenceAgentAWS            = "fence_aws"
-	fenceAgentIPMI           = "fence_ipmilan"
-	fenceAgentAction         = "reboot"
 	nodeIdentifierPrefixAWS  = "--plug"
 	nodeIdentifierPrefixIPMI = "--ipport"
 	testContainerName        = "test-container"
 	testPodName              = "test-pod"
-
+	fenceAgentDefaultAction  = "reboot"
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutTaint       = "2s"   // Timeout for checking the FAR taint
-	timeoutReboot      = "6m0s" // fencing with fence_aws should be completed within 6 minutes
-	timeoutAfterReboot = "5s"   // Timeout for verifying steps  after the node has been rebooted
-	pollTaint          = "100ms"
-	pollReboot         = "1s"
-	pollAfterReboot    = "250ms"
-	skipOOSREnvVarName = "SKIP_OOST_REMEDIATION_VERIFICATION"
+	timeoutTaint                = "20s"   // Timeout for checking the FAR taint
+	timeoutReboot               = "6m0s"  // fencing with reboot should be completed within 6 minutes
+	timeoutPowerOff             = "10m0s" // fencing with off should be completed within 10 minutes
+	timeoutAfterFenceAction     = "5m0s"  // Timeout for verifying steps after fencing.
+	timeoutForRemediationChecks = "5s"    // Timeout for remediation checks
+	pollTaint                   = "100ms"
+	pollReboot                  = "1s"
+	pollPowerOff                = "10s"
+	pollAfterFenceAction        = "10s"
+	pollForRemediationChecks    = "250ms"
+	skipOOSREnvVarName          = "SKIP_OOST_REMEDIATION_VERIFICATION"
 )
 
 var (
@@ -59,7 +60,7 @@ var _ = Describe("FAR E2e", func() {
 		testNodeParam  map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 	)
 	BeforeEach(func() {
-		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentAction)
+		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentDefaultAction)
 		var err error
 		testNodeParam, err = buildNodeParameters()
 		Expect(err).ToNot(HaveOccurred(), "can't get node information")
@@ -67,7 +68,7 @@ var _ = Describe("FAR E2e", func() {
 
 	// runFARTests is a utility function to run FAR tests.
 	// It accepts a remediation strategy and a condition to determine if the tests should be skipped.
-	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, skipCondition func() bool) {
+	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, testAction string, skipCondition func() bool) {
 		var (
 			availableWorkerNodes          *corev1.NodeList
 			selectedNode                  *corev1.Node
@@ -107,17 +108,23 @@ var _ = Describe("FAR E2e", func() {
 
 			// set the node as "unhealthy" by disabling kubelet
 			makeNodeUnready(selectedNode)
+			testShareParam["--action"] = testAction
 
 			startTime = time.Now()
 			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
+
 			DeferCleanup(deleteFAR, far)
+			// The node needs to be powered on after 'off' remediation
+			if testAction == "off" {
+				DeferCleanup(powerOnNodeAndWaitUntilReady, far, selectedNode)
+			}
 		})
-		When("running FAR to reboot a node with secrets in shared parameters (legacy)", func() {
+		When("running FAR to remediate a node with secrets in shared parameters (legacy)", func() {
 			BeforeEach(func() {
 				testShareParam = addSecretsToSharedParams(testShareParam)
 			})
 			It("should successfully remediate the node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy, testAction)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
@@ -131,18 +138,29 @@ var _ = Describe("FAR E2e", func() {
 				})
 			})
 			It("should successfully remediate the node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy, testAction)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
 	}
 
-	Context("stress cluster with ResourceDeletion remediation strategy", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, func() bool { return false })
+	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, "reboot", func() bool { return false })
 	})
 
-	Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, func() bool {
+	Context("stress cluster with OutOfServiceTaint remediation strategy under reboot scenario", func() {
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, "reboot", func() bool {
+			_, isExist := os.LookupEnv(skipOOSREnvVarName)
+			return isExist
+		})
+	})
+
+	Context("stress cluster with ResourceDeletion remediation strategy under power-off scenario", func() {
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, "off", func() bool { return false })
+	})
+
+	Context("stress cluster with OutOfServiceTaint remediation strategy under power-off scenario", func() {
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, "off", func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
@@ -359,8 +377,8 @@ func makeNodeUnready(node *corev1.Node) {
 	log.Info("node is unready", "node name", node.GetName())
 }
 
-// wasNodeRebooted waits until there is a newer boot time than before, a reboot occurred, otherwise it falls with an error
-func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
+// verifyNodeRebooted waits until there is a newer boot time than before, a reboot occurred, otherwise it falls with an error
+func verifyNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 	log.Info("checking if Node was rebooted", "node", nodeName, "previous boot time", nodeBootTimeBefore)
 	var nodeBootTimeAfter time.Time
 	Eventually(func() (time.Time, error) {
@@ -376,13 +394,31 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 	log.Info("successful reboot", "node", nodeName, "offset between last boot", nodeBootTimeAfter.Sub(nodeBootTimeBefore), "new boot time", nodeBootTimeAfter)
 }
 
+// verifyNodePoweredOff checks if the node remains powered off
+func verifyNodePoweredOff(nodeName string) {
+	log.Info("checking if Node was powered off", "node", nodeName)
+	var nodePowerStatus string
+
+	Eventually(func() (string, error) {
+		var err error
+		nodePowerStatus, err = e2eUtils.GetPowerStatus(machineClient, nodeName)
+		if err != nil {
+			log.Error(err, "Can't get power status of the node")
+		}
+		return nodePowerStatus, err
+	}, timeoutPowerOff, pollReboot).Should(Equal("stopped"))
+
+	log.Info("Successfully confirmed node is powered off", "node", nodeName)
+}
+
 // checkPodDeleted verifies if the pod has already been deleted due to resource deletion
 func checkPodDeleted(pod *corev1.Pod) {
-	ConsistentlyWithOffset(1, func() bool {
+	Eventually(func() bool {
 		newPod := &corev1.Pod{}
 		err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod)
 		return apiErrors.IsNotFound(err)
-	}, timeoutAfterReboot, pollAfterReboot).Should(BeTrue())
+	}, timeoutAfterFenceAction, pollAfterFenceAction).Should(BeTrue())
+
 	log.Info("Pod has already been deleted", "pod name", pod.Name)
 }
 
@@ -399,17 +435,22 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 			g.Expect(condition).ToNot(BeNil(), "expected condition %v to be set", conditionType)
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
-	}, timeoutAfterReboot, pollAfterReboot).Should(Succeed())
+	}, timeoutForRemediationChecks, pollForRemediationChecks).Should(Succeed())
 }
 
 // checkRemediation verify whether the node was remediated
-func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod, strategy v1alpha1.RemediationStrategyType) {
+func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod, strategy v1alpha1.RemediationStrategyType, testAction string) {
 
 	By("Check if FAR NoExecute taint was added")
 	wasTaintAdded(utils.CreateRemediationTaint(), nodeName)
 
-	By("Getting new node's boot time")
-	wasNodeRebooted(nodeName, nodeBootTimeBefore)
+	if testAction == "reboot" {
+		By("Getting new node's boot time")
+		verifyNodeRebooted(nodeName, nodeBootTimeBefore)
+	} else if testAction == "off" {
+		By("Check if the node powered off")
+		verifyNodePoweredOff(nodeName)
+	}
 
 	if strategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
 		By("Check if out-of-service taint was added")
@@ -446,11 +487,11 @@ func preTestsSetup() {
 func setFenceAgentParams(platformType configv1.PlatformType) {
 	switch platformType {
 	case configv1.AWSPlatformType:
-		fenceAgent = fenceAgentAWS
+		fenceAgent = e2eUtils.FenceAgentAWS
 		nodeIdentifierPrefix = nodeIdentifierPrefixAWS
 		By("running fence_aws")
 	case configv1.BareMetalPlatformType:
-		fenceAgent = fenceAgentIPMI
+		fenceAgent = e2eUtils.FenceAgentIPMI
 		nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
 		By("running fence_ipmilan")
 	default:
@@ -463,7 +504,7 @@ func buildSecretMap(clusterPlatform *configv1.Infrastructure) (map[string]string
 	secrets := map[string]string{}
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	if clusterPlatform.Status.PlatformStatus.Type == configv1.AWSPlatformType {
-		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, "aws-cloud-fencing-credentials-secret", "openshift-operators", "aws_access_key_id", "aws_secret_access_key")
+		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, e2eUtils.AWSSecretName, e2eUtils.AWSSecretNamespace, e2eUtils.AWSAccessKeyID, e2eUtils.AWSSecretAccessKey)
 		if err != nil {
 			log.Info("Can't get AWS credentials")
 			return nil, err
@@ -477,7 +518,7 @@ func buildSecretMap(clusterPlatform *configv1.Infrastructure) (map[string]string
 		// TODO : get ip from GetCredientals
 		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
 		// then parse ip
-		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, "openshift-machine-api", "username", "password")
+		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, e2eUtils.BMHCredentialNamespace, e2eUtils.BMHCredentialUserKey, e2eUtils.BMHCredentialPasswordKey)
 		if err != nil {
 			log.Info("Can't get BMH credentials")
 			return nil, err
@@ -506,4 +547,15 @@ func generateSecretResource() *corev1.Secret {
 		Type:       corev1.SecretTypeOpaque,
 	}
 	return secret
+}
+
+func powerOnNodeAndWaitUntilReady(far *v1alpha1.FenceAgentsRemediation, selectedNode *corev1.Node) (bool, error) {
+	_, err := e2eUtils.PowerOnNode(clientSet, far, selectedNode.Name, log)
+
+	if err != nil {
+		return false, err
+	}
+	waitForNodeHealthyCondition(selectedNode, corev1.ConditionTrue)
+
+	return true, nil
 }

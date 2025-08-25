@@ -44,12 +44,13 @@ FROM quay.io/centos/centos:stream9
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
-# Add Fence Agents and fence-agents-aws packages
+# Add many Fence Agents packages
 RUN dnf install -y dnf-plugins-core \
-    && dnf --enablerepo=highavailability install -y fence-agents-amt-ws fence-agents-apc-snmp fence-agents-cisco-mds fence-agents-cisco-ucs fence-agents-compute \
-    fence-agents-eaton-snmp fence-agents-emerson fence-agents-eps fence-agents-heuristics-ping fence-agents-ibmblade fence-agents-ifmib fence-agents-ilo2 \
-    fence-agents-intelmodular fence-agents-ipdu fence-agents-ipmilan fence-agents-kdump fence-agents-mpath fence-agents-redfish fence-agents-rhevm fence-agents-sbd \
-    fence-agents-scsi fence-agents-vmware-rest fence-agents-vmware-soap \
+    && dnf --enablerepo=highavailability install -y fence-agents-amt-ws fence-agents-apc-snmp fence-agents-cisco-ucs \
+    fence-agents-eaton-snmp fence-agents-emerson fence-agents-eps fence-agents-ibmblade fence-agents-ifmib fence-agents-ilo2 \
+    fence-agents-intelmodular fence-agents-ipdu fence-agents-ipmilan fence-agents-redfish fence-agents-rhevm \
+    fence-agents-vmware-rest fence-agents-vmware-soap \
+    fence-agents-kubevirt fence-agents-ibm-powervs fence-agents-ibm-vpc \
     fence-agents-aws fence-agents-azure-arm fence-agents-gce \
     && dnf clean all -y
 

@@ -7,6 +7,7 @@ const (
 
 	// events reasons
 	EventReasonCrNodeNotFound           = "NodeNotFound"
+	EventReasonCrUnsupportedAction      = "UnsupportedAction"
 	EventReasonRemediationStoppedByNHC  = "RemediationStoppedByNHC"
 	EventReasonAddFinalizer             = "AddFinalizer"
 	EventReasonRemoveRemediationTaint   = "RemoveRemediationTaint"
@@ -21,6 +22,7 @@ const (
 
 	// events messages
 	EventMessageCrNodeNotFound           = "CR name doesn't match a node name"
+	EventMessageCrUnsupportedAction      = "Unsupported action value in CR parameters"
 	EventMessageRemediationStoppedByNHC  = "Remediation was stopped by the Node Healthcheck Operator"
 	EventMessageAddFinalizer             = "Finalizer was added"
 	EventMessageRemoveRemediationTaint   = "Remediation taint was removed"

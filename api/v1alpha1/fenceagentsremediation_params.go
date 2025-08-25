@@ -42,7 +42,7 @@ const (
 	parameterActionName            = "--" + actionName
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	errorUnsupportedAction         = "FAR doesn't support any other action than reboot and off"
+	ErrorUnsupportedAction         = "FAR doesn't support any other action than reboot or off"
 )
 
 var (
@@ -242,7 +242,7 @@ func validateFenceAction(paramName, paramVal string) error {
 	if (paramName == ActionName || paramName == ParameterActionName) &&
 		(paramVal != "" && paramVal != parameterRebootActionValue && paramVal != parameterOffActionValue) {
 		// --action parameter with a different value from reboot is not supported
-		err := errors.New(errorUnsupportedAction)
+		err := errors.New(ErrorUnsupportedAction)
 		paramsLog.Error(err, "can't build CR with this action attribute", "action", paramVal)
 		return err
 	}
