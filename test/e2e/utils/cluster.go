@@ -2,10 +2,14 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -21,6 +25,14 @@ import (
 const (
 	clusterPlatformName = "cluster"
 	machinesNamespace   = "openshift-machine-api"
+	// For GetSecretData
+	AWSSecretName            = "aws-cloud-fencing-credentials-secret"
+	AWSSecretNamespace       = "openshift-operators"
+	AWSAccessKeyID           = "aws_access_key_id"
+	AWSSecretAccessKey       = "aws_secret_access_key"
+	BMHCredentialNamespace   = "openshift-machine-api"
+	BMHCredentialUserKey     = "username"
+	BMHCredentialPasswordKey = "password"
 )
 
 // GetClusterInfo fetch the cluster's infrastructure object to identify its type
@@ -119,4 +131,99 @@ func GetBMHNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.No
 		"worker-2": "6235",
 	}
 	return nodeList, nil
+}
+
+// GetPowerStatus returns node power status via machine-api
+//
+// We avoid using the fence agent's "status" action because it returns exit code 2 when the power is OFF.
+// Handling this non-zero code would require extra logic in `execCommandOnPod`(in command.go),
+// increasing complexity and risk of errors.
+// Using the machine resource provides a simpler and safer way to check power status.
+func GetPowerStatus(machineClient *machineclient.Clientset, targetNodename string) (string, error) {
+	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.status.providerStatus.instanceState}'
+
+	machinename, err := findMachineByNodeName(machineClient, targetNodename)
+	if err != nil {
+		return "", fmt.Errorf("failed to get machine name %s: %w", targetNodename, err)
+	}
+	// Trigger reconcile for status
+	err = triggerReconcileMachine(machineClient, machinename)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to trigger reconcile: %w", err)
+	}
+
+	machine, err := machineClient.MachineV1beta1().Machines(machinesNamespace).Get(context.TODO(), machinename, metav1.GetOptions{})
+
+	if err != nil || machine.Status.ProviderStatus == nil || machine.Status.ProviderStatus.Raw == nil {
+		return "", fmt.Errorf("providerStatus is nil for machine %s", machinename)
+	}
+
+	var status struct {
+		InstanceState *string `json:"instanceState,omitempty"`
+	}
+
+	if err := json.Unmarshal(machine.Status.ProviderStatus.Raw, &status); err != nil {
+		return "", fmt.Errorf("failed to unmarshal providerStatus for machine %q: %w", targetNodename, err)
+	}
+
+	return *status.InstanceState, err
+}
+
+// findMachineByNodeName finds the Machine that matches the given Node name.
+func findMachineByNodeName(machineClient *machineclient.Clientset, nodeName string) (string, error) {
+	machineList, err := machineClient.MachineV1beta1().Machines(machinesNamespace).List(context.TODO(), metav1.ListOptions{})
+
+	if err != nil {
+		return "", err
+	}
+
+	for _, machine := range machineList.Items {
+		for _, addr := range machine.Status.Addresses {
+			if addr.Type == "Hostname" && addr.Address == nodeName {
+				return machine.Name, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no machine found for node name %q", nodeName)
+}
+
+// triggerReconcileMachine forces a reconciliation of the target Machine object
+// by updating its metadata.labels with a unique value.
+//
+// GetPowerStatus retrieves the node's power status by querying the corresponding Machine object.
+// To ensure the status is current, this function first triggers a reconciliation of the Machine resource.
+// This helps speed up synchronization with the machine-api controller before reading the providerStatus.
+func triggerReconcileMachine(machineClient *machineclient.Clientset, machineName string) error {
+	// oc patch machine MACHINE_NAME -n openshift-machine-api -p '{"metadata":{"labels":{"far-test-reconcile-trigger-seq":"XXXXXX"}}}' --type=merge
+
+	// Generate a sequence value based on timestamp
+	seq := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	patch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]string{
+				"far-test-reconcile-trigger-seq": seq,
+			},
+		},
+	}
+
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch: %w", err)
+	}
+
+	_, err = machineClient.MachineV1beta1().Machines(machinesNamespace).Patch(
+		context.TODO(),
+		machineName,
+		types.MergePatchType,
+		patchBytes,
+		metav1.PatchOptions{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to patch machine %s: %w", machineName, err)
+	}
+
+	return nil
 }

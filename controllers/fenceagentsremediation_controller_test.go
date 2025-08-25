@@ -72,6 +72,21 @@ var _ = Describe("FAR Controller", func() {
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}
+	//Using a predefined 'map' for the 'off' action to prioritize test readability and avoid deep copy code in each test.
+	offActionShareParam := map[v1alpha1.ParameterName]string{
+		"--username": "admin",
+		"--password": "password",
+		"--action":   "off",
+		"--ip":       "192.168.111.1",
+		"--lanplus":  "",
+	}
+	invalidActionShareParam := map[v1alpha1.ParameterName]string{
+		"--username": "admin",
+		"--password": "password",
+		"--action":   "cycle",
+		"--ip":       "192.168.111.1",
+		"--lanplus":  "",
+	}
 	testShareParam := map[v1alpha1.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
@@ -295,6 +310,47 @@ var _ = Describe("FAR Controller", func() {
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
+			When("The 'action' parameter is set to 'off'", func() {
+				BeforeEach(func() {
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, offActionShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				})
+				It("should succeed and include the 'action' parameter with value 'off'", func() {
+					// Verify that the 'action' parameter is correctly set to 'off'
+					Eventually(func(g Gomega) {
+						g.Expect(storedCommand).To(ConsistOf([]string{
+							"fence_ipmilan",
+							"--lanplus",
+							"--password=password",
+							"--username=admin",
+							"--action=off",
+							"--ip=192.168.111.1",
+							"--pass2=abc2",
+							"--pass=abc",
+							"--ipport=6233"}))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+			When("The 'action' parameter is set to 'reboot'", func() {
+				BeforeEach(func() {
+					// Use the existing testShareParam which has 'action' set to 'reboot'
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				})
+				It("should succeed and include the 'action' parameter with value 'reboot'", func() {
+					// Verify that the 'action' parameter is correctly set to 'reboot'
+					Eventually(func(g Gomega) {
+						g.Expect(storedCommand).To(ConsistOf([]string{
+							"fence_ipmilan",
+							"--lanplus",
+							"--password=password",
+							"--username=admin",
+							"--action=reboot",
+							"--ip=192.168.111.1",
+							"--pass2=abc2",
+							"--pass=abc",
+							"--ipport=6233"}))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
 			When("Param defined both in Node and shared params", func() {
 				BeforeEach(func() {
 					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParamTwice, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
@@ -411,7 +467,6 @@ var _ = Describe("FAR Controller", func() {
 				It("should have finalizer and taint, while the tested pod will be deleted", testSuccessfulRemediation)
 			})
 		})
-
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
@@ -448,7 +503,15 @@ var _ = Describe("FAR Controller", func() {
 				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventReasonNodeRemediationCompleted)
 			})
 		})
-
+		When("create FAR CR with invalid Action parameter", func() {
+			BeforeEach(func() {
+				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidActionShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+			})
+			It("should trigger ParamInvalid Event", func() {
+				verifyEvent(corev1.EventTypeWarning, utils.EventReasonCrUnsupportedAction, utils.EventMessageCrUnsupportedAction)
+			})
+		})
 		Context("Fence agent failures", func() {
 			BeforeEach(func() {
 				plogs.Clear()

@@ -1,6 +1,6 @@
 # Fence Agents Remediation (FAR)
 
-fence-agents-remediation (*FAR*) is a Kubernetes operator that uses [well-known agents](https://github.com/ClusterLabs/fence-agents) to fence and remediate unhealthy nodes. The remediation includes rebooting the unhealthy node using a fence agent, and then evicting workloads from the unhealthy node. The operator is recommended when a node becomes unhealthy, and we want remediate it by completely isolating the node from a cluster and help with recovering its workload. Isolation is needed, since we can’t “trust” the unhealthy node, to prevent it from accessing the shared resources like [RWO volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes), and recovering the workloads helps to accelerate and keep their running time.
+fence-agents-remediation (*FAR*) is a Kubernetes operator that uses [well-known agents](https://github.com/ClusterLabs/fence-agents) to fence and remediate unhealthy nodes. The remediation includes remediating the unhealthy node using a fence agent with an action such as `reboot` or `off`, and then evicting workloads from the unhealthy node. The operator is recommended when a node becomes unhealthy, and we want remediate it by completely isolating the node from a cluster and help with recovering its workload. Isolation is needed, since we can’t “trust” the unhealthy node, to prevent it from accessing the shared resources like [RWO volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes), and recovering the workloads helps to accelerate and keep their running time.
 
 FAR is one of the remediator operators by [Medik8s](https://www.medik8s.io/remediation/remediation/), such as [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation), that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) which detects an unhealthy node and creates remediation Custom Resource ([CR](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)). It is recommended to use FAR with NHC for an easier and smoother experience by fully automating the remediation process, but it can be used as a standalone remediator for the more experienced user. Moreover, like other Medik8s operators FAR was generated using the [operator-sdk](https://github.com/operator-framework/operator-sdk), and it supports Operator Lifecycle Manager ([OLM](https://olm.operatorframework.io/docs/)).
 
@@ -10,6 +10,10 @@ FAR uses a fence agent to fence a Kubernetes node. Generally, fencing is the pro
 
 FAR uses some of the fence agents from the [upstream repository](https://github.com/ClusterLabs/fence-agents) by the *ClusterLabs* group. For example, `fence_ipmilan` for Intelligent Platform Management Interface ([IPMI](https://en.wikipedia.org/wiki/Intelligent_Platform_Management_Interface)) environments or `fence_aws` for Amazon Web Services ([AWS](https://aws.amazon.com)) platform. These upstream fence agents are Python scripts that are used to isolate a corrupted node from the rest of the cluster in a power-based fencing method. When a node is switched off, it cannot corrupt any data on shared storage. The fence agents use command-line arguments rather than configuration files, and to understand better the parameters you can view the fence agent's metadata (e.g., `fence_ipmilan -o metadata`).
 
+FAR supports an `--action` parameter, which defines how the node should be remediated. FAR supports both `reboot` and `off` actions:
+* reboot: Restarts the node, allowing automatic recovery.
+* off: Powers off the node, allowing manual recovery.
+
 ## Advantages
 
 * Robustness - FAR has direct feedback from the agent's management Application Programming Interface (API) call (e.g., IPMI) about the result of the fence action without using the Kubernetes API.
@@ -17,12 +21,23 @@ FAR uses some of the fence agents from the [upstream repository](https://github.
 * Availability - FAR has high availability by running with two replicas of its pod, and when the leader of these two pods is evicted, then the other one takes control and reduces FAR downtime.
 * Diversity - FAR includes several fence agents from a large known set of upstream fencing agents for bare metal servers, virtual machines, cloud platforms, etc.
 * Adjustability - FAR allows to set up different parameters for running the API call that remediates the node.
+* Flexibility – FAR supports multiple remediation actions (`reboot` and `off`), allowing users to choose between faster recovery or stronger isolation depending on their cluster needs.
 
 ## How does FAR work?
 
 The operator watches for new or deleted CRs called `FenceAgentsRemediation` (or `far`) which trigger remediation for the node, based on the CR's name. When the CR name doesn't match a node in the cluster, then the CR won't trigger any remediation by FAR. Remediation includes adding a taint on the node, rebooting the node by fence agent, and at last deleting the remaining workloads.
 
-FAR remediates by simply rebooting the unhealthy node, and moving any remaining workloads to other nodes, so they can continue running and be isolated from the unhealthy node. The reboot is done by executing a fence agent for the unhealthy node while evicting the workloads from this node is achieved by tainting the node and deleting the workloads. FAR unique taint, `medik8s.io/fence-agents-remediation`, has a [NoExecute effect](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#taint-based-evictions), so  any pods that don't tolerate this taint are evicted immediately, and they won't be scheduled again after the node has been rebooted as long as the taint remains (the taint is removed on FenceAgentsRemediation CR deletion). Deleting the workloads is done to speed up Kubernetes rescheduling of the remaining pods (most likely [stateful pods](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#using-statefulsets)), that are not running anymore.
+FAR remediates by executing a fence agent action, `reboot` or `off`, on the unhealthy node, and moving any remaining workloads to other nodes, so they can continue running and be isolated from the unhealthy node.
+
+### Reboot-based remediation
+
+The reboot is done by executing a fence agent for the unhealthy node while evicting the workloads from this node is achieved by tainting the node and deleting the workloads. FAR unique taint, `medik8s.io/fence-agents-remediation`, has a [NoExecute effect](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#taint-based-evictions), so  any pods that don't tolerate this taint are evicted immediately, and they won't be scheduled again after the node has been rebooted as long as the taint remains (the taint is removed on FenceAgentsRemediation CR deletion). Deleting the workloads is done to speed up Kubernetes rescheduling of the remaining pods (most likely [stateful pods](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#using-statefulsets)), that are not running anymore.
+
+### Power-off-based remediation
+
+If you choose the `off` action, FAR powers off the unhealthy node using the fence agent. Unlike `reboot`, the node does not automatically return to service. It remains powered off until manually recovered by an administrator. The taint and workload eviction behavior remain the same as in the `reboot` case, ensuring that the node is isolated and workloads are safely rescheduled elsewhere.
+
+### FenceAgentsRemediationTemplate (fartemplate)
 
 FAR includes the `FenceAgentsRemediationTemplate` (or `fartemplate`) Custom Resource Definition ([CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#create-a-customresourcedefinition)) for how to create a FenceAgentsRemediation CR. The template has the same fields as far CR (e.g., agent name) and it is used for automatically creating remediation CR by another operator/mechanism (e.g., [NHC](#far-with-nhc)). The other operator is responsible of creating (and eventually deleting) the FenceAgentsRemediation CR with the name of the unhealthy node, even though FAR can be used manually without fartemplate and an additional operator (see [standalone FAR](#standalone-far)).
 
@@ -36,9 +51,10 @@ FAR includes the `FenceAgentsRemediationTemplate` (or `fartemplate`) Custom Reso
 #### Workflow
 
 1. FAR adds NoExecute taint to the failed node
-=> Ensure that any workloads are not executed after rebooting the failed node, and any stateless pods (that can’t tolerate FAR NoExecute taint) will be evicted immediately
-2. FAR reboots the failed node via the Fence Agent
-=> After rebooting, there are no workloads in the failed node
+=> Ensure that any workloads are not executed after rebooting or powering off the failed node, and any stateless pods (that can’t tolerate FAR NoExecute taint) will be evicted immediately
+2. FAR executes the configured fence agent action on the failed node
+=> Depending on the action (`reboot` or `off`), the node is either restarted or powered off.
+=> After the action, there are no workloads in the failed node
 3. FAR forcefully deletes the pods in the failed node
 => The scheduler understands that it can schedule the failed pods on a different node
 4. After the failed node becomes healthy, NHC deletes FenceAgentsRemediation CR, the NoExecute taint in Step 2 is removed, and the node becomes schedulable again
@@ -214,6 +230,7 @@ spec:
   sharedparameters:
     --username: "admin"
     --lanplus: ""
+    # You can set --action to either "reboot" or "off" depending on your remediation strategy
     --action: "reboot"
     --ip: "192.168.111.1"
   nodeparameters:
