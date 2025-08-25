@@ -20,10 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
-	"time"
-
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
+	"maps"
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -40,16 +38,11 @@ import (
 const (
 	parameterRebootActionValue     = "reboot"
 	parameterOffActionValue        = "off"
-	parameterDefaultActionValue    = parameterRebootActionValue
 	actionName                     = "action"
 	parameterActionName            = "--" + actionName
-	parameterActionStatusValue     = "status"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorUnsupportedAction         = "FAR doesn't support any other action than reboot and off"
-	// statusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
-	// Overall time for all the validations shouldn't exceed the 13 seconds ocp cap (https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/architecture/admission-plug-ins)
-	statusValidationTimeout = 3 * time.Second
 )
 
 var (
