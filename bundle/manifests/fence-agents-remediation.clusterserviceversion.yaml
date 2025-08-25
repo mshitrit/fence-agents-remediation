@@ -512,6 +512,5 @@ spec:
       - fenceagentsremediationtemplates
     sideEffects: None
     targetPort: 9443
-    timeoutSeconds: 13
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate
