@@ -119,7 +119,6 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 	if len(nodeNames) == 0 {
 		paramsLog.Info("validateFenceAgentTemplate no nodes found")
 		nodeNames = append(nodeNames, "temp-validation")
-		// Status validation will NOT occur for shared params with a node template (because we want to avoid getting all the nodes from the API server)
 	}
 	// Validate parameters for each node mentioned in NodeParameters
 	for _, nodeName := range nodeNames {
