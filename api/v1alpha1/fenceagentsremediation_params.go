@@ -39,8 +39,8 @@ import (
 const (
 	parameterRebootActionValue     = "reboot"
 	parameterOffActionValue        = "off"
-	actionName                     = "action"
-	parameterActionName            = "--" + actionName
+	ActionName                     = "action"
+	ParameterActionName            = "--" + ActionName
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	ErrorUnsupportedAction         = "FAR doesn't support any other action than reboot or off"

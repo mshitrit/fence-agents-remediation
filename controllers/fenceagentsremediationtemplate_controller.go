@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 
@@ -39,7 +40,9 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
-const successMarker = "OK"
+const (
+	successMarker = "OK"
+)
 
 // FenceAgentsRemediationTemplateReconciler reconciles a FenceAgentsRemediationTemplate object
 type FenceAgentsRemediationTemplateReconciler struct {
@@ -57,6 +60,10 @@ type ParameterValidationResult struct {
 }
 
 const (
+	parameterActionStatusValue = "status"
+	// statusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
+	statusValidationTimeout = 3 * time.Second
+
 	ConditionParametersValidation = "ParametersValidation"
 
 	ReasonValidationInProgress = "ValidationInProgress"
@@ -234,7 +241,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 	}
 
 	// Build command with status action
-	command := []string{agent, v1alpha1.ParameterActionName, v1alpha1.ParameterActionStatusValue}
+	command := []string{agent, v1alpha1.ParameterActionName, parameterActionStatusValue}
 
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
@@ -244,16 +251,16 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 	}
 
 	// Run the status command with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, v1alpha1.StatusValidationTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, statusValidationTimeout)
 	defer cancel()
 
 	r.Log.Info("Testing fence agent status command", "agent", agent, "command", command)
 
-	stdout, stderr, _, err := r.Executor.SyncExecute(ctx, command, 1, 0, v1alpha1.StatusValidationTimeout)
+	stdout, stderr, _, err := r.Executor.SyncExecute(ctx, command, 1, 0, statusValidationTimeout)
 
 	if err != nil {
 		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
-			result.Message = fmt.Sprintf("status command timed out after %v", v1alpha1.StatusValidationTimeout)
+			result.Message = fmt.Sprintf("status command timed out after %v", statusValidationTimeout)
 			r.Log.Info("runFenceStatus status command timed out", "result", result)
 			return result
 		}
