@@ -40,10 +40,6 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
-const (
-	successMarker = "OK"
-)
-
 // FenceAgentsRemediationTemplateReconciler reconciles a FenceAgentsRemediationTemplate object
 type FenceAgentsRemediationTemplateReconciler struct {
 	client.Client
@@ -175,9 +171,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		}
 
 		res := r.runFenceStatus(ctx, spec.Agent, params)
-		if res.IsSuccessful {
-			fart.Status.ValidationPassed[n] = successMarker
-		} else {
+		if !res.IsSuccessful {
 			fart.Status.ValidationFailures[n] = res.Message
 		}
 		return ctrl.Result{Requeue: true}, nil
