@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/template"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
@@ -41,16 +40,6 @@ func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
-}
-
-func validateFAR(farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error) {
-	aggregated := errors.NewAggregate([]error{
-		validateAgentName(farSpec.Agent),
-		validateStrategy(farSpec.RemediationStrategy),
-		validateTemplateParameters(farSpec),
-	})
-
-	return admission.Warnings{}, aggregated
 }
 
 func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {

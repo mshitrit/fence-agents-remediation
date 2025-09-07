@@ -74,16 +74,13 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 
 	var allErrors []error
 
+	// Skipping validation because must be either a FenceAgentsRemediationTemplate or a FenceAgentsRemediation
+	metaObj, _ := new.(metav1.Object)
+
 	// First, run the existing FAR validation logic
-	validateWarnings, validateFarErr := validateFAR(&r.Spec.Template.Spec)
+	validateWarnings, validateFarErr := v.validateFAR(ctx, v.Client, metaObj.GetNamespace(), &r.Spec.Template.Spec)
 	if validateFarErr != nil {
 		allErrors = append(allErrors, validateFarErr)
-	}
-
-	// Perform enhanced parameter validation with secret collection
-	err := v.validateFenceAgentTemplate(ctx, r)
-	if err != nil {
-		allErrors = append(allErrors, err)
 	}
 
 	return validateWarnings, utilErrors.NewAggregate(allErrors)
@@ -96,10 +93,20 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 	return nil, nil
 }
 
-// validateFenceAgentTemplate validates fence agent parameters for templates
+func (v *customValidator) validateFAR(ctx context.Context, k8sClient client.Client, namespace string, farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error) {
+	aggregated := utilErrors.NewAggregate([]error{
+		validateAgentName(farSpec.Agent),
+		validateStrategy(farSpec.RemediationStrategy),
+		validateTemplateParameters(farSpec),
+		validateFenceAgentParameters(ctx, k8sClient, namespace, farSpec),
+	})
+
+	return admission.Warnings{}, aggregated
+}
+
+// validateFenceAgentParameters validates fence agent parameters for templates
 // by creating temporary FAR CRs and using BuildFenceAgentParams + validateParametersWithStatus
-func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *FenceAgentsRemediationTemplate) error {
-	spec := &r.Spec.Template.Spec
+func validateFenceAgentParameters(ctx context.Context, k8sClient client.Client, namespace string, spec *FenceAgentsRemediationSpec) error {
 
 	// Check if template has any parameters at all
 	hasSharedParams := len(spec.SharedParameters) > 0
@@ -118,7 +125,7 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
-		paramsLog.Info("validateFenceAgentTemplate no nodes found")
+		paramsLog.Info("validateFenceAgentParameters no nodes found")
 		nodeNames = append(nodeNames, "temp-validation")
 	}
 	// Validate parameters for each node mentioned in NodeParameters
@@ -127,13 +134,13 @@ func (v *customValidator) validateFenceAgentTemplate(ctx context.Context, r *Fen
 		tempFAR := &FenceAgentsRemediation{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      nodeName,
-				Namespace: r.Namespace,
+				Namespace: namespace,
 			},
 			Spec: *spec,
 		}
 
 		// BuildFenceAgentParams handles secret collection and validation internally
-		_, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
+		_, _, err := BuildFenceAgentParams(ctx, k8sClient, tempFAR)
 		if err != nil {
 			// If BuildFenceAgentParams fails, return the validation error
 			return err
