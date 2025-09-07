@@ -69,21 +69,30 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 }
 
 func (v *customValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
-	r := new.(*FenceAgentsRemediationTemplate)
-	paramsLog.Info("validate update", "name", r.Name)
-
+	spec := v.getSpec(new)
 	var allErrors []error
 
 	// Skipping validation because must be either a FenceAgentsRemediationTemplate or a FenceAgentsRemediation
 	metaObj, _ := new.(metav1.Object)
 
 	// First, run the existing FAR validation logic
-	validateWarnings, validateFarErr := v.validateFAR(ctx, v.Client, metaObj.GetNamespace(), &r.Spec.Template.Spec)
+	validateWarnings, validateFarErr := v.validateFAR(ctx, v.Client, metaObj.GetNamespace(), &spec)
 	if validateFarErr != nil {
 		allErrors = append(allErrors, validateFarErr)
 	}
 
 	return validateWarnings, utilErrors.NewAggregate(allErrors)
+}
+
+func (v *customValidator) getSpec(new runtime.Object) FenceAgentsRemediationSpec {
+	var spec FenceAgentsRemediationSpec
+	if fart, isFart := new.(*FenceAgentsRemediationTemplate); isFart {
+		spec = fart.Spec.Template.Spec
+	} else {
+		far, _ := new.(*FenceAgentsRemediation)
+		spec = far.Spec
+	}
+	return spec
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
