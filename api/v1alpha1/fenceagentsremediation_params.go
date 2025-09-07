@@ -75,24 +75,23 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 	return nil, nil
 }
 
-// TODO mshitrit merge validate far into here
 func (v *customValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
 	spec := v.getSpec(new)
-	var allErrors []error
 
 	// Skipping validation because must be either a FenceAgentsRemediationTemplate or a FenceAgentsRemediation
 	metaObj, _ := new.(metav1.Object)
 
-	// First, run the existing FAR validation logic
-	validateWarnings, validateFarErr := v.validateFAR(ctx, v.Client, metaObj.GetNamespace(), &spec)
-	if validateFarErr != nil {
-		allErrors = append(allErrors, validateFarErr)
-	}
+	aggregated := utilErrors.NewAggregate([]error{
+		validateAgentName(spec.Agent),
+		validateStrategy(spec.RemediationStrategy),
+		validateTemplateParameters(spec),
+		validateFenceAgentParameters(ctx, v.Client, metaObj.GetNamespace(), spec),
+	})
 
-	return validateWarnings, utilErrors.NewAggregate(allErrors)
+	return admission.Warnings{}, aggregated
 }
 
-func (v *customValidator) getSpec(new runtime.Object) FenceAgentsRemediationSpec {
+func (v *customValidator) getSpec(new runtime.Object) *FenceAgentsRemediationSpec {
 	var spec FenceAgentsRemediationSpec
 	if fart, isFart := new.(*FenceAgentsRemediationTemplate); isFart {
 		spec = fart.Spec.Template.Spec
@@ -100,18 +99,7 @@ func (v *customValidator) getSpec(new runtime.Object) FenceAgentsRemediationSpec
 		far, _ := new.(*FenceAgentsRemediation)
 		spec = far.Spec
 	}
-	return spec
-}
-
-func (v *customValidator) validateFAR(ctx context.Context, k8sClient client.Client, namespace string, farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error) {
-	aggregated := utilErrors.NewAggregate([]error{
-		validateAgentName(farSpec.Agent),
-		validateStrategy(farSpec.RemediationStrategy),
-		validateTemplateParameters(farSpec),
-		validateFenceAgentParameters(ctx, k8sClient, namespace, farSpec),
-	})
-
-	return admission.Warnings{}, aggregated
+	return &spec
 }
 
 // validateFenceAgentParameters validates fence agent parameters for templates
