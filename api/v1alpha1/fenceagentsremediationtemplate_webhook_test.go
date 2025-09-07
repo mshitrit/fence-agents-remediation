@@ -14,22 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// mockClient for testing
-type mockClient struct {
-	client.Client
-	GetFunc func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error
-}
-
-// Implement Get method to handle secret retrieval in tests
-func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	if m.GetFunc != nil {
-		return m.GetFunc(ctx, key, obj, opts...)
-	}
-
-	// When GetFunc is nil, call the underlying Client.Get
-	return m.Client.Get(ctx, key, obj, opts...)
-}
-
 // getFuncNodeSecretIpConflict returns the default Get function behavior for secrets
 func getFuncNodeSecretIpConflict() func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	return func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
