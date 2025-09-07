@@ -61,6 +61,22 @@ var (
 	cancel    context.CancelFunc
 )
 
+// mockClient for testing
+type mockClient struct {
+	client.Client
+	GetFunc func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error
+}
+
+// Implement Get method to handle secret retrieval in tests
+func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if m.GetFunc != nil {
+		return m.GetFunc(ctx, key, obj, opts...)
+	}
+
+	// When GetFunc is nil, call the underlying Client.Get
+	return m.Client.Get(ctx, key, obj, opts...)
+}
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -155,19 +171,3 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
-
-// mockClient for testing
-type mockClient struct {
-	client.Client
-	GetFunc func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error
-}
-
-// Implement Get method to handle secret retrieval in tests
-func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	if m.GetFunc != nil {
-		return m.GetFunc(ctx, key, obj, opts...)
-	}
-
-	// When GetFunc is nil, call the underlying Client.Get
-	return m.Client.Get(ctx, key, obj, opts...)
-}

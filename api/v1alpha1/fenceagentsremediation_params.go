@@ -68,6 +68,14 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 	return v.validate(ctx, new)
 }
 
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	r := obj.(*FenceAgentsRemediationTemplate)
+	paramsLog.Info("validate delete", "name", r.Name)
+	return nil, nil
+}
+
+// TODO mshitrit merge validate far into here
 func (v *customValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
 	spec := v.getSpec(new)
 	var allErrors []error
@@ -93,13 +101,6 @@ func (v *customValidator) getSpec(new runtime.Object) FenceAgentsRemediationSpec
 		spec = far.Spec
 	}
 	return spec
-}
-
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	r := obj.(*FenceAgentsRemediationTemplate)
-	paramsLog.Info("validate delete", "name", r.Name)
-	return nil, nil
 }
 
 func (v *customValidator) validateFAR(ctx context.Context, k8sClient client.Client, namespace string, farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error) {

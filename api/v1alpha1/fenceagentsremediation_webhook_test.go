@@ -11,6 +11,7 @@ import (
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
 	var (
+		// TODO mshitrit insert mockClient
 		mockValidatorClient = &mockClient{}
 
 		validator = &customValidator{
