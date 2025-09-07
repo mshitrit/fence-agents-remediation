@@ -11,11 +11,8 @@ import (
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
 	var (
-		// TODO mshitrit insert mockClient
-		mockValidatorClient = &mockClient{}
-
 		validator = &customValidator{
-			Client: mockValidatorClient,
+			Client: &mockClient{},
 		}
 		ctx = context.Background()
 	)
