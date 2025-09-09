@@ -39,6 +39,9 @@ var (
 func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithValidator(&customValidator{
+			Client: mgr.GetClient(),
+		}).
 		Complete()
 }
 
