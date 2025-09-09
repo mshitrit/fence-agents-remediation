@@ -42,7 +42,7 @@ const (
 	actionName                     = "action"
 	parameterActionName            = "--" + actionName
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
-	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
+	errorMissingParams             = "invalid template: mandatory parameters are missing"
 	ErrorUnsupportedAction         = "FAR doesn't support any other action than reboot or off"
 )
 
