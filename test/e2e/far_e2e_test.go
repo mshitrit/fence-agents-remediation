@@ -142,6 +142,27 @@ var _ = Describe("FAR E2e", func() {
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
+
+		When("Trying to create or update to an invalid FAR/T CR", func() {
+			BeforeEach(func() {
+				testShareParam = addSecretsToSharedParams(testShareParam)
+			})
+			It("it should fail", func() {
+				far := getFar(nodeName)
+				Expect(far).ToNot(BeNil())
+				far.Spec.NodeParameters = nil
+				far.Spec.SharedParameters = nil
+				far.Spec.SharedSecretName = nil
+				far.Spec.NodeSecretNames = nil
+				Expect(k8sClient.Update(context.Background(), far)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
+
+				fart := &v1alpha1.FenceAgentsRemediationTemplate{ObjectMeta: metav1.ObjectMeta{Name: "invalid-fart", Namespace: operatorNsName}}
+				fart.Spec = v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: far.Spec}}
+				Expect(k8sClient.Create(context.Background(), fart)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "create fart without any params should be prevented")
+
+			})
+		})
+
 	}
 
 	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
@@ -166,6 +187,14 @@ var _ = Describe("FAR E2e", func() {
 		})
 	})
 })
+
+func getFar(nodeName string) *v1alpha1.FenceAgentsRemediation {
+	far := &v1alpha1.FenceAgentsRemediation{ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName}}
+	if err := k8sClient.Get(context.TODO(), client.ObjectKeyFromObject(far), far); err == nil {
+		return far
+	}
+	return nil
+}
 
 var _ = AfterSuite(func() {
 	if len(remediationTimes) > 0 {
