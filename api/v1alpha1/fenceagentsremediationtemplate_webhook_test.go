@@ -71,7 +71,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				Expect(warnings).To(BeEmpty())
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(ContainSubstring("nodeParameters or sharedParameters or both are missing, and they cannot be empty")))
+				Expect(err).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")))
 			})
 		})
 
@@ -161,7 +161,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				}
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
-				Expect(err).To(MatchError(ContainSubstring("nodeParameters or sharedParameters or both are missing, and they cannot be empty")))
+				Expect(err).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")))
 			})
 		})
 
