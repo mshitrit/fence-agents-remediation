@@ -75,8 +75,8 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	r := obj.(*FenceAgentsRemediationTemplate)
-	paramsLog.Info("validate delete", "name", r.Name)
+	metaObj, _ := obj.(metav1.Object)
+	paramsLog.Info("validate delete", "name", metaObj.GetName())
 	return nil, nil
 }
 
