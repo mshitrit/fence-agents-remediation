@@ -79,8 +79,10 @@ var _ = Describe("FAR E2e", func() {
 			nodeName                      string
 			pod                           *corev1.Pod
 			startTime, nodeBootTimeBefore time.Time
+			skipRemediationCreation       bool
 		)
 		BeforeEach(func() {
+			skipRemediationCreation = false
 			if stopTesting {
 				Skip("Skip testing due to unsupported platform")
 			}
@@ -106,6 +108,9 @@ var _ = Describe("FAR E2e", func() {
 
 		})
 		JustBeforeEach(func() {
+			if skipRemediationCreation {
+				return
+			}
 			// create tested pod which will be deleted by the far CR
 			pod = createTestedPod(nodeName)
 			DeferCleanup(cleanupTestedResources, pod)
@@ -149,20 +154,25 @@ var _ = Describe("FAR E2e", func() {
 
 		When("Trying to create or update to an invalid FAR/T CR", func() {
 			BeforeEach(func() {
+				// since we test here the webhook we are skipping remediation creation in order to make sure failed nodes wouldn't affect the tested webhooks
+				skipRemediationCreation = true
 				testShareParam = addSecretsToSharedParams(testShareParam)
 			})
 			It("it should fail", func() {
 				// eventually block used to avoid update conflict
-				Eventually(func(g Gomega) bool {
-					far := getFar(nodeName)
-					g.Expect(far).ToNot(BeNil())
-					far.Spec.NodeParameters = nil
-					far.Spec.SharedParameters = nil
-					far.Spec.SharedSecretName = nil
-					far.Spec.NodeSecretNames = nil
-					g.Expect(k8sClient.Update(context.Background(), far)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
-					return true
-				}, "10s", "100ms").Should(BeTrue())
+				far := &v1alpha1.FenceAgentsRemediation{
+					ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
+					Spec: v1alpha1.FenceAgentsRemediationSpec{
+						Agent:               fenceAgent,
+						SharedParameters:    nil,
+						NodeParameters:      nil,
+						RemediationStrategy: remediationStrategy,
+						RetryCount:          10,
+						RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+						Timeout:             metav1.Duration{Duration: 60 * time.Second},
+					},
+				}
+				Expect(k8sClient.Create(context.Background(), far)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
 
 				emptyParamsSpec := v1alpha1.FenceAgentsRemediationSpec{
 					Agent:               fenceAgent,
