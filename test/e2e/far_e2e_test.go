@@ -45,6 +45,10 @@ const (
 	pollAfterFenceAction        = "10s"
 	pollForRemediationChecks    = "250ms"
 	skipOOSREnvVarName          = "SKIP_OOST_REMEDIATION_VERIFICATION"
+
+	// test Action
+	reboot = "reboot"
+	off    = "off"
 )
 
 var (
@@ -179,22 +183,22 @@ var _ = Describe("FAR E2e", func() {
 	}
 
 	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, "reboot", func() bool { return false })
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, reboot, func() bool { return false })
 	})
 
 	Context("stress cluster with OutOfServiceTaint remediation strategy under reboot scenario", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, "reboot", func() bool {
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, reboot, func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
 	})
 
 	Context("stress cluster with ResourceDeletion remediation strategy under power-off scenario", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, "off", func() bool { return false })
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, off, func() bool { return false })
 	})
 
 	Context("stress cluster with OutOfServiceTaint remediation strategy under power-off scenario", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, "off", func() bool {
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, off, func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
@@ -486,10 +490,10 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 	By("Check if FAR NoExecute taint was added")
 	wasTaintAdded(utils.CreateRemediationTaint(), nodeName)
 
-	if testAction == "reboot" {
+	if testAction == reboot {
 		By("Getting new node's boot time")
 		verifyNodeRebooted(nodeName, nodeBootTimeBefore)
-	} else if testAction == "off" {
+	} else if testAction == off {
 		By("Check if the node powered off")
 		verifyNodePoweredOff(nodeName)
 	}
