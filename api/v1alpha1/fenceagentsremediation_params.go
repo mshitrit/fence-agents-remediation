@@ -90,7 +90,7 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 		validateAgentName(spec.Agent),
 		validateStrategy(spec.RemediationStrategy),
 		validateTemplateParameters(spec),
-		validateFenceAgentParameters(ctx, v.Client, metaObj.GetNamespace(), spec),
+		validateFenceAgentForNodes(ctx, v.Client, metaObj.GetNamespace(), spec),
 	})
 
 	return admission.Warnings{}, aggregated
@@ -107,9 +107,9 @@ func (v *customValidator) getSpec(new runtime.Object) *FenceAgentsRemediationSpe
 	return &spec
 }
 
-// validateFenceAgentParameters validates fence agent parameters for templates
-// by creating temporary FAR CRs and using BuildFenceAgentParams + validateParametersWithStatus
-func validateFenceAgentParameters(ctx context.Context, k8sClient client.Client, namespace string, spec *FenceAgentsRemediationSpec) error {
+// validateFenceAgentForNodes validates fence agent parameters for all the nodes defined in the spec
+// by creating temporary FAR CRs and using BuildFenceAgentParams
+func validateFenceAgentForNodes(ctx context.Context, k8sClient client.Client, namespace string, spec *FenceAgentsRemediationSpec) error {
 
 	// Check if template has any parameters at all
 	hasSharedParams := len(spec.SharedParameters) > 0
@@ -128,7 +128,7 @@ func validateFenceAgentParameters(ctx context.Context, k8sClient client.Client, 
 
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
-		paramsLog.Info("validateFenceAgentParameters no nodes found")
+		paramsLog.Info("validateFenceAgentForNodes no nodes found")
 		nodeNames = append(nodeNames, "temp-validation")
 	}
 	// Validate parameters for each node mentioned in NodeParameters
