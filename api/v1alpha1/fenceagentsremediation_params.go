@@ -87,7 +87,7 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 		return admission.Warnings{}, err
 	}
 
-	// Skipping validation because must be either a FenceAgentsRemediationTemplate or a FenceAgentsRemediation
+	// No need to check casting success because it must be either a FenceAgentsRemediationTemplate or a FenceAgentsRemediation
 	metaObj, _ := new.(metav1.Object)
 
 	aggregated := utilErrors.NewAggregate([]error{
