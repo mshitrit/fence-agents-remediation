@@ -306,7 +306,7 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	paramsLog.Info("BuildFenceAgentParams starting", "Node Name", far.Name)
 
 	nodeName := GetNodeName(far)
-	secretParams, err := collectRemediationSecretParams(ctx, k8sClient, far, nodeName)
+	secretParams, err := collectAllSecretParams(ctx, k8sClient, far, nodeName)
 	if err != nil {
 		paramsLog.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
 		return nil, true, err
@@ -340,11 +340,10 @@ func GetNodeName(far *FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
-// collectRemediationSecretParams collects the parameters from the shared secret and the node secret
-func collectRemediationSecretParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation, nodeName string) (SecretParams, error) {
-	paramsLog.Info("collectRemediationSecretParams start for node", "node", nodeName)
+// collectAllSecretParams collects the parameters from the shared secret and the node secret
+func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation, nodeName string) (SecretParams, error) {
+	paramsLog.Info("collectAllSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
-
 	// Extract secret names and namespace from FAR
 	sharedSecretName := far.Spec.SharedSecretName
 	nodeSecretNames := far.Spec.NodeSecretNames
@@ -380,7 +379,7 @@ func collectRemediationSecretParams(ctx context.Context, k8sClient client.Client
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
 		maps.Copy(secretParams, nodeSecretParams)
 	}
-	paramsLog.Info("collectRemediationSecretParams finish successfully for node", "node", nodeName)
+	paramsLog.Info("collectAllSecretParams finish successfully for node", "node", nodeName)
 	return SecretParams{secretParams, isNodeTemplateExist}, nil
 }
 
