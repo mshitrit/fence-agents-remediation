@@ -348,7 +348,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 	sharedSecretName := far.Spec.SharedSecretName
 	nodeSecretNames := far.Spec.NodeSecretNames
 	namespace := far.Namespace
-	isNodeTemplateExist := false
+	hasNodeTemplate := false
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
@@ -362,9 +362,9 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 
 			if err != nil {
 				paramsLog.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
-				return SecretParams{secretParams, isNodeTemplateExist}, err
+				return SecretParams{secretParams, hasNodeTemplate}, err
 			}
-			isNodeTemplateExist = isNodeTemplateExist || processedParamVal != paramVal
+			hasNodeTemplate = hasNodeTemplate || processedParamVal != paramVal
 			secretParams[paramName] = processedParamVal
 		}
 	}
@@ -374,13 +374,13 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 	if isFound {
 		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
 		if err != nil {
-			return SecretParams{nil, isNodeTemplateExist}, err
+			return SecretParams{nil, hasNodeTemplate}, err
 		}
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
 		maps.Copy(secretParams, nodeSecretParams)
 	}
 	paramsLog.Info("collectAllSecretParams finish successfully for node", "node", nodeName)
-	return SecretParams{secretParams, isNodeTemplateExist}, nil
+	return SecretParams{secretParams, hasNodeTemplate}, nil
 }
 
 // collectSecretParams reads and adds the secret params if they are available
