@@ -216,23 +216,19 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 	nodeName := GetNodeName(far)
 	fenceAgentParams := make(map[ParameterName]string)
 
-	// Track parameter names for uniqueness validation
-	existingParams := make(map[ParameterName]bool)
-
 	isNodeTemplateExistInSharedParams := false
 	// Validate and add shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
-		// Verify action must be reboot
+		// Verify action must be reboot or off
 		if err := validateFenceAction(string(paramName), paramVal); err != nil {
 			return nil, err
 		}
 		// Verify param isn't already defined
-		if existingParams[paramName] {
+		if _, exist := fenceAgentParams[paramName]; exist {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, paramName)
 			paramsLog.Error(err, "can't build fence agents parameters a parameter is defined multiple times", "parameter name", paramName)
 			return nil, err
 		}
-		existingParams[paramName] = true
 
 		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
 		if err != nil {
@@ -246,13 +242,11 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 	// Validate and add node parameters (these can override shared parameters)
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[NodeName(nodeName)]; isFound {
-			// Verify action must be reboot
+			// Verify action must be reboot or off
 			if err := validateFenceAction(string(paramName), nodeVal); err != nil {
 				return nil, err
 			}
 			// For node params we don't enforce uniqueness as node param value will override shared param
-			existingParams[paramName] = true
-
 			if _, exist := fenceAgentParams[paramName]; exist {
 				paramsLog.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
 			}
@@ -265,16 +259,15 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 	// Validate and add secret parameters
 	for secretKey, secretVal := range secretParams.params {
 		secretParam := ParameterName(secretKey)
-		// Verify action must be reboot
+		// Verify action must be reboot or off
 		if err := validateFenceAction(string(secretParam), secretVal); err != nil {
 			return nil, err
 		}
-		if existingParams[secretParam] {
+		if _, exist := fenceAgentParams[secretParam]; exist {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, secretParam)
 			paramsLog.Error(err, "can't build fence agents parameters a parameter is defined multiple times", "parameter name", secretParam)
 			return nil, err
 		}
-		existingParams[secretParam] = true
 		fenceAgentParams[secretParam] = secretVal
 	}
 
