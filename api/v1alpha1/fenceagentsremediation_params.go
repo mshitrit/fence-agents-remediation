@@ -81,7 +81,11 @@ func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 }
 
 func (v *customValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
-	spec := v.getSpec(new)
+	spec, err := v.getSpec(new)
+	if err != nil {
+		paramsLog.Error(err, "unsupported object type for validation")
+		return admission.Warnings{}, err
+	}
 
 	// Skipping validation because must be either a FenceAgentsRemediationTemplate or a FenceAgentsRemediation
 	metaObj, _ := new.(metav1.Object)
@@ -96,15 +100,17 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 	return admission.Warnings{}, aggregated
 }
 
-func (v *customValidator) getSpec(new runtime.Object) *FenceAgentsRemediationSpec {
-	var spec FenceAgentsRemediationSpec
-	if fart, isFart := new.(*FenceAgentsRemediationTemplate); isFart {
-		spec = fart.Spec.Template.Spec
-	} else {
-		far, _ := new.(*FenceAgentsRemediation)
-		spec = far.Spec
+func (v *customValidator) getSpec(new runtime.Object) (*FenceAgentsRemediationSpec, error) {
+	switch obj := new.(type) {
+	case *FenceAgentsRemediationTemplate:
+		spec := obj.Spec.Template.Spec
+		return &spec, nil
+	case *FenceAgentsRemediation:
+		spec := obj.Spec
+		return &spec, nil
+	default:
+		return nil, fmt.Errorf("unsupported object type %T", new)
 	}
-	return &spec
 }
 
 // validateFenceAgentForNodes validates fence agent parameters for all the nodes defined in the spec
