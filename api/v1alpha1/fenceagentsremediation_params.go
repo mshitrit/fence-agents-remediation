@@ -362,7 +362,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 
 			if err != nil {
 				paramsLog.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
-				return SecretParams{secretParams, hasNodeTemplate}, err
+				return SecretParams{}, err
 			}
 			hasNodeTemplate = hasNodeTemplate || processedParamVal != paramVal
 			secretParams[paramName] = processedParamVal
