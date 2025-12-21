@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
@@ -207,12 +208,7 @@ func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
 		nodeNamesMap[string(nodeName)] = true
 	}
 
-	var nodeNames []string
-	for nodeName := range nodeNamesMap {
-		nodeNames = append(nodeNames, nodeName)
-	}
-
-	return nodeNames
+	return slices.Collect(maps.Keys(nodeNamesMap))
 }
 
 // validateFenceAgentParams builds the fence agent parameters map with validation
@@ -348,39 +344,36 @@ func GetNodeName(far *FenceAgentsRemediation) string {
 func collectRemediationSecretParams(ctx context.Context, k8sClient client.Client, far *FenceAgentsRemediation, nodeName string) (SecretParams, error) {
 	paramsLog.Info("collectRemediationSecretParams start for node", "node", nodeName)
 	secretParams := map[string]string{}
-	var sharedSecretParams map[string]string
-	var err error
 
 	// Extract secret names and namespace from FAR
 	sharedSecretName := far.Spec.SharedSecretName
 	nodeSecretNames := far.Spec.NodeSecretNames
 	namespace := far.Namespace
+	isNodeTemplateExist := false
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
-		sharedSecretParams, err = collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
+		sharedSecretParams, err := collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
 		if err != nil {
 			return SecretParams{}, err
 		}
-	}
-	isNodeTemplateExist := false
-	// Templating secret shared parameters
-	for paramName, paramVal := range sharedSecretParams {
-		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
+		// Templating secret shared parameters
+		for paramName, paramVal := range sharedSecretParams {
+			processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
 
-		if err != nil {
-			paramsLog.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
-			return SecretParams{secretParams, isNodeTemplateExist}, err
+			if err != nil {
+				paramsLog.Error(err, "Failed to process template in shared secret parameter", "parameter", paramName)
+				return SecretParams{secretParams, isNodeTemplateExist}, err
+			}
+			isNodeTemplateExist = isNodeTemplateExist || processedParamVal != paramVal
+			secretParams[paramName] = processedParamVal
 		}
-		isNodeTemplateExist = isNodeTemplateExist || processedParamVal != paramVal
-		secretParams[paramName] = processedParamVal
 	}
 
 	// collect secret params from the node's secret
 	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
-	var nodeSecretParams map[string]string
 	if isFound {
-		nodeSecretParams, err = collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
+		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
 		if err != nil {
 			return SecretParams{nil, isNodeTemplateExist}, err
 		}
