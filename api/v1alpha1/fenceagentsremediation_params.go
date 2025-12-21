@@ -155,7 +155,7 @@ func (v *customValidator) validateTemplateParameters(spec *FenceAgentsRemediatio
 // by creating temporary FAR CRs and using BuildFenceAgentParams
 func (v *customValidator) validateFenceAgentForNodes(ctx context.Context, namespace string, spec *FenceAgentsRemediationSpec) error {
 
-	// Check if template has any parameters at all
+	// Check if spec has any parameters at all
 	hasSharedParams := len(spec.SharedParameters) > 0
 	hasNodeParams := len(spec.NodeParameters) > 0
 	hasSecrets := spec.SharedSecretName != nil || spec.NodeSecretNames != nil
