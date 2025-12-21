@@ -393,8 +393,6 @@ func collectSecretParams(
 	isSharedSecret bool,
 ) (map[string]string, error) {
 	secretParams := make(map[string]string)
-
-	// Get the secret directly (inlined from getSecret)
 	secret := &corev1.Secret{}
 	secretKeyObj := client.ObjectKey{Name: secretName, Namespace: namespace}
 
