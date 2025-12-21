@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/template"
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 const (
@@ -49,6 +50,8 @@ const (
 var (
 	// paramsLog is for logging in this package.
 	paramsLog = logf.Log.WithName("fenceagentsremediation-params")
+	// verify agent existence with os.Stat function
+	agentValidator = validation.NewAgentValidator()
 )
 
 type SecretParams struct {
@@ -91,10 +94,10 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 	metaObj, _ := new.(metav1.Object)
 
 	aggregated := utilErrors.NewAggregate([]error{
-		validateAgentName(spec.Agent),
-		validateStrategy(spec.RemediationStrategy),
-		validateTemplateParameters(spec),
-		validateFenceAgentForNodes(ctx, v.Client, metaObj.GetNamespace(), spec),
+		v.validateAgentName(spec.Agent),
+		v.validateStrategy(spec.RemediationStrategy),
+		v.validateTemplateParameters(spec),
+		v.validateFenceAgentForNodes(ctx, metaObj.GetNamespace(), spec),
 	})
 
 	return admission.Warnings{}, aggregated
@@ -113,9 +116,44 @@ func (v *customValidator) getSpec(new runtime.Object) (*FenceAgentsRemediationSp
 	}
 }
 
+func (v *customValidator) validateAgentName(agent string) error {
+	exists, err := agentValidator.ValidateAgentName(agent)
+	if err != nil {
+		return utilErrors.NewAggregate([]error{
+			fmt.Errorf("Failed to validate fence agent: %s. You might want to try again.", agent),
+			err,
+		})
+	}
+	if !exists {
+		return fmt.Errorf("unsupported fence agent: %s", agent)
+	}
+	return nil
+}
+
+func (v *customValidator) validateStrategy(farRemStrategy RemediationStrategyType) error {
+	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !isOutOfServiceTaintSupported {
+		return fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
+	}
+	return nil
+}
+
+// validateTemplateParameters validates template syntax in shared parameters and collects all errors
+func (v *customValidator) validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
+	var validationErrors []error
+
+	// Validate template syntax in shared parameters
+	for paramName, paramValue := range spec.SharedParameters {
+		if _, err := template.RenderParameterTemplate(paramValue, "dummy-node-name"); err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid template syntax in shared parameter %s: %w", paramName, err))
+		}
+	}
+
+	return utilErrors.NewAggregate(validationErrors)
+}
+
 // validateFenceAgentForNodes validates fence agent parameters for all the nodes defined in the spec
 // by creating temporary FAR CRs and using BuildFenceAgentParams
-func validateFenceAgentForNodes(ctx context.Context, k8sClient client.Client, namespace string, spec *FenceAgentsRemediationSpec) error {
+func (v *customValidator) validateFenceAgentForNodes(ctx context.Context, namespace string, spec *FenceAgentsRemediationSpec) error {
 
 	// Check if template has any parameters at all
 	hasSharedParams := len(spec.SharedParameters) > 0
@@ -149,7 +187,7 @@ func validateFenceAgentForNodes(ctx context.Context, k8sClient client.Client, na
 		}
 
 		// BuildFenceAgentParams handles secret collection and validation internally
-		_, _, err := BuildFenceAgentParams(ctx, k8sClient, tempFAR)
+		_, _, err := BuildFenceAgentParams(ctx, v.Client, tempFAR)
 		if err != nil {
 			// If BuildFenceAgentParams fails, return the validation error
 			return err
