@@ -159,7 +159,6 @@ var _ = Describe("FAR E2e", func() {
 				testShareParam = addSecretsToSharedParams(testShareParam)
 			})
 			It("it should fail", func() {
-				// eventually block used to avoid update conflict
 				far := &v1alpha1.FenceAgentsRemediation{
 					ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 					Spec: v1alpha1.FenceAgentsRemediationSpec{
@@ -172,7 +171,7 @@ var _ = Describe("FAR E2e", func() {
 						Timeout:             metav1.Duration{Duration: 60 * time.Second},
 					},
 				}
-				Expect(k8sClient.Create(context.Background(), far)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
+				Expect(k8sClient.Create(context.Background(), far)).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
 
 				emptyParamsSpec := v1alpha1.FenceAgentsRemediationSpec{
 					Agent:               fenceAgent,
@@ -185,7 +184,7 @@ var _ = Describe("FAR E2e", func() {
 				}
 				fart := &v1alpha1.FenceAgentsRemediationTemplate{ObjectMeta: metav1.ObjectMeta{Name: "invalid-fart", Namespace: operatorNsName}}
 				fart.Spec = v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: emptyParamsSpec}}
-				Expect(k8sClient.Create(context.Background(), fart)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "create fart without any params should be prevented")
+				Expect(k8sClient.Create(context.Background(), fart)).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")), "create fart without any params should be prevented")
 
 			})
 		})
@@ -214,14 +213,6 @@ var _ = Describe("FAR E2e", func() {
 		})
 	})
 })
-
-func getFar(nodeName string) *v1alpha1.FenceAgentsRemediation {
-	far := &v1alpha1.FenceAgentsRemediation{ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName}}
-	if err := k8sClient.Get(context.TODO(), client.ObjectKeyFromObject(far), far); err == nil {
-		return far
-	}
-	return nil
-}
 
 var _ = AfterSuite(func() {
 	if len(remediationTimes) > 0 {

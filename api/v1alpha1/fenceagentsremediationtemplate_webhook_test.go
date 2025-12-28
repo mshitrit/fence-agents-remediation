@@ -14,15 +14,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const testNs = "test-namespace"
+
 // getFuncNodeSecretIpConflict returns the default Get function behavior for secrets
 func getFuncNodeSecretIpConflict() func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	return func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 		// Default behavior - Return a pre-built secret for testing duplicate parameters
-		if key.Name == "test-node-secret-ip-conflict" && key.Namespace == "test-namespace" {
+		if key.Name == "test-node-secret-ip-conflict" && key.Namespace == testNs {
 			if secret, ok := obj.(*corev1.Secret); ok {
 				secret.ObjectMeta = metav1.ObjectMeta{
 					Name:      "test-node-secret-ip-conflict",
-					Namespace: "test-namespace",
+					Namespace: testNs,
 				}
 				secret.Data = map[string][]byte{
 					"--ip":       []byte("192.168.1.100"), // This will conflict with NodeParameters
@@ -57,7 +59,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 		})
 
-		When("template has only shared parameters without template and no node parameters", func() {
+		When("farTemplate has only shared parameters without NodeTemplate and no node parameters", func() {
 			It("should be rejected", func() {
 				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
@@ -71,11 +73,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				Expect(warnings).To(BeEmpty())
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")))
+				Expect(err).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")))
 			})
 		})
 
-		When("template has only shared parameters with NodeTemplate and no node parameters", func() {
+		When("farTemplate has only shared parameters with NodeTemplate and no node parameters", func() {
 			It("should be accepted", func() {
 				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
@@ -92,7 +94,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 		})
 
-		When("template has only secret parameters with NodeTemplate and no node parameters", func() {
+		When("farTemplate has only secret parameters with NodeTemplate and no node parameters", func() {
 			It("should be accepted", func() {
 				// Setup mock to return secret with NodeTemplate
 				originalGetFunc := mockValidatorClient.GetFunc
@@ -101,11 +103,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				})
 
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == "test-shared-secret-with-template" && key.Namespace == "test-namespace" {
+					if key.Name == "test-shared-secret-with-template" && key.Namespace == testNs {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
 								Name:      "test-shared-secret-with-template",
-								Namespace: "test-namespace",
+								Namespace: testNs,
 							}
 							secret.Data = map[string][]byte{
 								"--ip":       []byte("192.168.1.{{.NodeName}}"), // This contains a NodeTemplate
@@ -121,7 +123,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				farTemplate := &FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-secret-template",
-						Namespace: "test-namespace",
+						Namespace: testNs,
 					},
 					Spec: FenceAgentsRemediationTemplateSpec{
 						Template: FenceAgentsRemediationTemplateResource{
@@ -161,7 +163,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				}
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
-				Expect(err).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")))
+				Expect(err).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")))
 			})
 		})
 
@@ -243,7 +245,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				}
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
-				Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than reboot or off")))
+				Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than `reboot` or `off`")))
 			})
 		})
 
@@ -288,7 +290,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "invalid-template",
-					Namespace: "test-namespace",
+					Namespace: testNs,
 				},
 				Spec: FenceAgentsRemediationTemplateSpec{
 					Template: FenceAgentsRemediationTemplateResource{
@@ -323,7 +325,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "valid-template",
-					Namespace: "test-namespace",
+					Namespace: testNs,
 				},
 				Spec: FenceAgentsRemediationTemplateSpec{
 					Template: FenceAgentsRemediationTemplateResource{
@@ -355,7 +357,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "invalid-action-template",
-					Namespace: "test-namespace",
+					Namespace: testNs,
 				},
 				Spec: FenceAgentsRemediationTemplateSpec{
 					Template: FenceAgentsRemediationTemplateResource{
@@ -373,14 +375,14 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			warnings, err := validator.ValidateCreate(ctx, farTemplate)
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("FAR doesn't support any other action than reboot"))
+			Expect(err.Error()).To(ContainSubstring("FAR doesn't support any other action than `reboot`"))
 		})
 
 		It("should fail when templates reference missing node secrets", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "missing-secrets-template",
-					Namespace: "test-namespace",
+					Namespace: testNs,
 				},
 				Spec: FenceAgentsRemediationTemplateSpec{
 					Template: FenceAgentsRemediationTemplateResource{
@@ -408,7 +410,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "duplicate-params-template",
-					Namespace: "test-namespace",
+					Namespace: testNs,
 				},
 				Spec: FenceAgentsRemediationTemplateSpec{
 					Template: FenceAgentsRemediationTemplateResource{
