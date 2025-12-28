@@ -44,8 +44,8 @@ const (
 	actionName                     = "action"
 	parameterActionName            = "--" + actionName
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
-	errorMissingParams             = "invalid template: mandatory parameters are missing"
-	ErrorUnsupportedAction         = "FAR doesn't support any other action than reboot or off"
+	errorMissingParams             = "invalid spec: mandatory parameters are missing"
+	ErrorUnsupportedAction         = "FAR doesn't support any other action than `reboot` or `off`"
 )
 
 var (
@@ -161,7 +161,7 @@ func (v *customValidator) validateFenceAgentForNodes(ctx context.Context, namesp
 	hasNodeParams := len(spec.NodeParameters) > 0
 	hasSecrets := spec.SharedSecretName != nil || spec.NodeSecretNames != nil
 
-	// If template has no parameters or secrets, template is considered invalid
+	// If farTemplate has no parameters or secrets, then farTemplate is considered invalid
 	if !hasSharedParams && !hasNodeParams && !hasSecrets {
 		err := errors.New(errorMissingParams)
 		paramsLog.Error(err, "Missing parameters")
@@ -226,7 +226,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 		// Verify param isn't already defined
 		if _, exist := fenceAgentParams[paramName]; exist {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, paramName)
-			paramsLog.Error(err, "can't build fence agents parameters a parameter is defined multiple times", "parameter name", paramName)
+			paramsLog.Error(err, "can't build fence agents parameters when a parameter is defined multiple times", "parameter name", paramName)
 			return nil, err
 		}
 
@@ -265,7 +265,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 		}
 		if _, exist := fenceAgentParams[secretParam]; exist {
 			err := fmt.Errorf(errorParamDefinedMultipleTimes, secretParam)
-			paramsLog.Error(err, "can't build fence agents parameters a parameter is defined multiple times", "parameter name", secretParam)
+			paramsLog.Error(err, "can't build fence agents parameters when a parameter is defined multiple times", "parameter name", secretParam)
 			return nil, err
 		}
 		fenceAgentParams[secretParam] = secretVal
@@ -285,7 +285,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 func validateFenceAction(paramName, paramVal string) error {
 	if (paramName == actionName || paramName == parameterActionName) &&
 		(paramVal != "" && paramVal != parameterRebootActionValue && paramVal != parameterOffActionValue) {
-		// --action parameter with a different value from reboot is not supported
+		// --action parameter with a different value from `reboot` or `off` is not supported
 		err := errors.New(ErrorUnsupportedAction)
 		paramsLog.Error(err, "can't build CR with this action attribute", "action", paramVal)
 		return err
@@ -379,12 +379,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 // collectSecretParams reads and adds the secret params if they are available
 // For shared secrets, IsNotFound errors are ignored (returns empty map)
 // For node secrets, IsNotFound errors are returned as errors
-func collectSecretParams(
-	ctx context.Context,
-	k8sClient client.Client,
-	secretName, namespace string,
-	isSharedSecret bool,
-) (map[string]string, error) {
+func collectSecretParams(ctx context.Context, k8sClient client.Client, secretName, namespace string, isSharedSecret bool) (map[string]string, error) {
 	secretParams := make(map[string]string)
 	secret := &corev1.Secret{}
 	secretKeyObj := client.ObjectKey{Name: secretName, Namespace: namespace}
