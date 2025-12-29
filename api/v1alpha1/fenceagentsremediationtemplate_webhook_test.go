@@ -145,7 +145,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 		})
 
-		When("template has no shared parameters and no node parameters", func() {
+		When("farTemplate has no shared parameters and no node parameters", func() {
 			It("should be rejected", func() {
 				farTemplate := &FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{
