@@ -142,10 +142,10 @@ func (v *customValidator) validateStrategy(farRemStrategy RemediationStrategyTyp
 func (v *customValidator) validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
 	var validationErrors []error
 
-	// Validate template syntax in shared parameters
+	// Validate NodeTemplate syntax in shared parameters
 	for paramName, paramValue := range spec.SharedParameters {
 		if _, err := template.RenderParameterTemplate(paramValue, "dummy-node-name"); err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("invalid template syntax in shared parameter %s: %w", paramName, err))
+			validationErrors = append(validationErrors, fmt.Errorf("invalid NodeTemplate syntax in shared parameter %s: %w", paramName, err))
 		}
 	}
 
@@ -367,7 +367,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 	if isFound {
 		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
 		if err != nil {
-			return SecretParams{nil, hasNodeTemplate}, err
+			return SecretParams{}, err
 		}
 		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
 		maps.Copy(secretParams, nodeSecretParams)
