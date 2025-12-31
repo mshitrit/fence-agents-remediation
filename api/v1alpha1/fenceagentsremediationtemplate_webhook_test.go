@@ -438,6 +438,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR parameter"))
 		})
+
 	})
 })
 
