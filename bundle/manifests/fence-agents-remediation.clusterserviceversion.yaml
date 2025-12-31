@@ -12,6 +12,14 @@ metadata:
           },
           "spec": {
             "agent": "fence_ipmilan",
+            "nodeSecretNames": {
+              "master-0": "fence-agents-credentials-master0",
+              "master-1": "fence-agents-credentials-master1",
+              "master-2": "fence-agents-credentials-master2",
+              "worker-0": "fence-agents-credentials-worker0",
+              "worker-1": "fence-agents-credentials-worker1",
+              "worker-2": "fence-agents-credentials-worker2"
+            },
             "nodeparameters": {
               "--ipport": {
                 "master-0": "6230",
@@ -22,15 +30,14 @@ metadata:
                 "worker-2": "6235"
               }
             },
-            "remediationStrategy": "ResourceDeletion",
+            "remediationStrategy": "OutOfServiceTaint",
             "retrycount": 5,
             "retryinterval": "5s",
+            "sharedSecretName": "fence-agents-credentials-shared",
             "sharedparameters": {
               "--action": "reboot",
               "--ip": "192.168.111.1",
-              "--lanplus": "",
-              "--password": "password",
-              "--username": "admin"
+              "--lanplus": ""
             },
             "timeout": "60s"
           }
@@ -42,7 +49,39 @@ metadata:
             "name": "fenceagentsremediationtemplate-default"
           },
           "spec": {
-            "template": {}
+            "template": {
+              "spec": {
+                "agent": "fence_ipmilan",
+                "nodeSecretNames": {
+                  "master-0": "fence-agents-credentials-master0",
+                  "master-1": "fence-agents-credentials-master1",
+                  "master-2": "fence-agents-credentials-master2",
+                  "worker-0": "fence-agents-credentials-worker0",
+                  "worker-1": "fence-agents-credentials-worker1",
+                  "worker-2": "fence-agents-credentials-worker2"
+                },
+                "nodeparameters": {
+                  "--ipport": {
+                    "master-0": "6230",
+                    "master-1": "6231",
+                    "master-2": "6232",
+                    "worker-0": "6233",
+                    "worker-1": "6234",
+                    "worker-2": "6235"
+                  }
+                },
+                "remediationStrategy": "OutOfServiceTaint",
+                "retrycount": 5,
+                "retryinterval": "5s",
+                "sharedSecretName": "fence-agents-credentials-shared",
+                "sharedparameters": {
+                  "--action": "reboot",
+                  "--ip": "192.168.111.1",
+                  "--lanplus": ""
+                },
+                "timeout": "60s"
+              }
+            }
           }
         }
       ]
@@ -83,7 +122,7 @@ spec:
       - description: NodeSecretNames maps the node name to the Secret name which contains
           params relevant for that node.
         displayName: Node Secret Names
-        path: nodeSecrets
+        path: nodeSecretNames
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -152,7 +191,7 @@ spec:
       - description: NodeSecretNames maps the node name to the Secret name which contains
           params relevant for that node.
         displayName: Node Secret Names
-        path: template.spec.nodeSecrets
+        path: template.spec.nodeSecretNames
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -334,7 +373,11 @@ spec:
             matchLabels:
               app.kubernetes.io/name: fence-agents-remediation-operator
               control-plane: controller-manager
-          strategy: {}
+          strategy:
+            rollingUpdate:
+              maxSurge: 0
+              maxUnavailable: 1
+            type: RollingUpdate
           template:
             metadata:
               annotations:
@@ -368,6 +411,7 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                  readOnlyRootFilesystem: true
               - args:
                 - --health-probe-bind-address=:8081
                 - --metrics-bind-address=127.0.0.1:8080
@@ -405,6 +449,7 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                  readOnlyRootFilesystem: true
               priorityClassName: system-cluster-critical
               securityContext:
                 runAsNonRoot: true
@@ -412,6 +457,14 @@ spec:
                   type: RuntimeDefault
               serviceAccountName: fence-agents-remediation-controller-manager
               terminationGracePeriodSeconds: 10
+              topologySpreadConstraints:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: fence-agents-remediation-operator
+                    control-plane: controller-manager
+                maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: DoNotSchedule
       permissions:
       - rules:
         - apiGroups:

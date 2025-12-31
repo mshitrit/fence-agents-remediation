@@ -103,7 +103,7 @@ type FenceAgentsRemediationSpec struct {
 	// NodeSecretNames maps the node name to the Secret name which contains params relevant for that node.
 	// +optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeSecretNames map[NodeName]string `json:"nodeSecrets,omitempty"`
+	NodeSecretNames map[NodeName]string `json:"nodeSecretNames,omitempty"`
 
 	// SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
 	// Using this Secret is optional.

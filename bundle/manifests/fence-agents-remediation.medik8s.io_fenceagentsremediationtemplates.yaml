@@ -58,7 +58,7 @@ spec:
                           It should have a fence_ prefix.
                         pattern: fence_.+
                         type: string
-                      nodeSecrets:
+                      nodeSecretNames:
                         additionalProperties:
                           type: string
                         description: NodeSecretNames maps the node name to the Secret

@@ -4,15 +4,13 @@ metadata:
   name: worker-1
 spec:
   agent: fence_ipmilan
-  retrycount: 5
-  retryinterval: "5s"
-  timeout: "60s"
-  sharedparameters:
-    --username: "admin"
-    --password: "password"
-    --lanplus: ""
-    --action: "reboot"
-    --ip: "192.168.111.1"
+  nodeSecretNames:
+    master-0: fence-agents-credentials-master0
+    master-1: fence-agents-credentials-master1
+    master-2: fence-agents-credentials-master2
+    worker-0: fence-agents-credentials-worker0
+    worker-1: fence-agents-credentials-worker1
+    worker-2: fence-agents-credentials-worker2
   nodeparameters:
     --ipport:
       master-0: "6230"
@@ -21,4 +19,12 @@ spec:
       worker-0: "6233"
       worker-1: "6234"
       worker-2: "6235"
-  remediationStrategy: ResourceDeletion
+  remediationStrategy: OutOfServiceTaint
+  retrycount: 5
+  retryinterval: "5s"
+  sharedSecretName: fence-agents-credentials-shared
+  sharedparameters:
+    --action: "reboot"
+    --ip: "192.168.111.1"
+    --lanplus: ""
+  timeout: "60s"

@@ -38,7 +38,7 @@ spec:
       - description: NodeSecretNames maps the node name to the Secret name which contains
           params relevant for that node.
         displayName: Node Secret Names
-        path: nodeSecrets
+        path: nodeSecretNames
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -107,7 +107,7 @@ spec:
       - description: NodeSecretNames maps the node name to the Secret name which contains
           params relevant for that node.
         displayName: Node Secret Names
-        path: template.spec.nodeSecrets
+        path: template.spec.nodeSecretNames
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
