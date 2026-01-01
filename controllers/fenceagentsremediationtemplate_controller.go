@@ -173,6 +173,12 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		res := r.runFenceStatus(ctx, spec.Agent, params)
 		if !res.IsSuccessful {
 			fart.Status.ValidationFailures[n] = res.Message
+		} else {
+			fart.Status.ValidationPassed[n] = "Success"
+		}
+
+		if err := r.Client.Status().Update(ctx, fart); err != nil {
+			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}

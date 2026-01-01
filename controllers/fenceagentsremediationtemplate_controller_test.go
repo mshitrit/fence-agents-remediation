@@ -148,7 +148,6 @@ var _ = Describe("FART Controller", func() {
 })
 
 func verifySuccess(fart *v1alpha1.FenceAgentsRemediationTemplate) {
-
 	Eventually(func(g Gomega) {
 		updated := &v1alpha1.FenceAgentsRemediationTemplate{}
 		g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(fart), updated)).To(Succeed())
@@ -161,5 +160,3 @@ func verifySuccess(fart *v1alpha1.FenceAgentsRemediationTemplate) {
 		g.Expect(cond.Reason).To(Equal(ReasonValidationSucceeded))
 	}, "5s", "200ms").Should(Succeed())
 }
-
-//TODO mshitrit implement disabled configuration
