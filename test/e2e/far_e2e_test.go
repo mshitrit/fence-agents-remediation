@@ -189,6 +189,36 @@ var _ = Describe("FAR E2e", func() {
 			})
 		})
 
+		When("creating a valid FART to validate fence agent parameters", func() {
+			BeforeEach(func() {
+				// since we test here the validation we are skipping remediation creation
+				skipRemediationCreation = true
+				testShareParam = addSecretsToSharedParams(testShareParam)
+			})
+			It("should validate the fence agent parameters and set the validation condition", func() {
+				validFARTSpec := v1alpha1.FenceAgentsRemediationSpec{
+					Agent:               fenceAgent,
+					SharedParameters:    testShareParam,
+					NodeParameters:      testNodeParam,
+					RemediationStrategy: remediationStrategy,
+					RetryCount:          10,
+					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+					Timeout:             metav1.Duration{Duration: 60 * time.Second},
+				}
+				fart := &v1alpha1.FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{Name: "valid-fart-validation-test", Namespace: operatorNsName},
+					Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: validFARTSpec}},
+				}
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create valid fart should succeed")
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
+				})
+
+				By("checking that ParametersValidation condition is set and validation completes")
+				verifyFARTValidationCondition(fart.Name, operatorNsName)
+			})
+		})
+
 	}
 
 	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
@@ -483,6 +513,21 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
 	}, timeoutForRemediationChecks, pollForRemediationChecks).Should(Succeed())
+}
+
+// verifyFARTValidationCondition checks if the ParametersValidation condition on a FART is set and has the expected status
+func verifyFARTValidationCondition(fartName, namespace string) {
+	fart := &v1alpha1.FenceAgentsRemediationTemplate{}
+	fartNamespacedName := client.ObjectKey{Name: fartName, Namespace: namespace}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), fartNamespacedName, fart)).To(Succeed())
+		condition := meta.FindStatusCondition(fart.Status.Conditions, "ParametersValidation")
+		g.Expect(condition).ToNot(BeNil(), "expected ParametersValidation condition to be set")
+		g.Expect(condition.Status).To(Equal(metav1.ConditionTrue), "expected ParametersValidation condition to have status %v, but got %v", metav1.ConditionTrue, condition.Status)
+		g.Expect(condition.Reason).To(Equal("ValidationSucceeded"), "expected validation to succeed")
+		g.Expect(len(fart.Status.ValidationFailures)).To(Equal(0), "expected no validation failures")
+	}, "2m0s", "2s").Should(Succeed())
+	log.Info("FART validation condition verified", "fart name", fartName, "status", metav1.ConditionTrue)
 }
 
 // checkRemediation verify whether the node was remediated
