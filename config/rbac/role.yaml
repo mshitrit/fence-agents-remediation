@@ -43,6 +43,7 @@ rules:
   - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations
+  - fenceagentsremediationtemplates
   verbs:
   - create
   - delete
@@ -55,37 +56,13 @@ rules:
   - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations/finalizers
+  - fenceagentsremediationtemplates/finalizers
   verbs:
   - update
 - apiGroups:
   - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - fence-agents.medik8s.io
-  resources:
-  - fenceagentsremediationtemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - fence-agents.medik8s.io
-  resources:
-  - fenceagentsremediationtemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - fence-agents.medik8s.io
-  resources:
   - fenceagentsremediationtemplates/status
   verbs:
   - get
