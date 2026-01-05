@@ -209,7 +209,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 }
 
 func (r *FenceAgentsRemediationTemplateReconciler) isRecentlyCompletedValidated(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	recentTimeBuffer := time.Millisecond * 500
+	recentTimeBuffer := time.Second * 2
 	validationStatus := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
 	if validationStatus == nil || validationStatus.Status == metav1.ConditionUnknown {
 		return false
