@@ -119,7 +119,7 @@ type FenceAgentsRemediationSpec struct {
 	// +optional
 	// +kubebuilder:default:="100%"
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|-1|[0-9]+)$"
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	StatusValidationSample *intstr.IntOrString `json:"validationSample,omitempty"`
 }
