@@ -110,6 +110,11 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 // validateFenceStatusForTemplate contains the template validation logic (extracted from Reconcile)
 func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
+	// Recently validated, so skipping in order to not trigger endless reconcile loop
+	if r.isRecentlyCompletedValidated(fart) {
+		return ctrl.Result{}, nil
+	}
+
 	spec := &fart.Spec.Template.Spec
 	nodeNames := v1alpha1.GetNodeNamesFromSpec(spec)
 	if len(nodeNames) == 0 {
@@ -201,6 +206,15 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		})
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *FenceAgentsRemediationTemplateReconciler) isRecentlyCompletedValidated(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
+	recentTimeBuffer := time.Millisecond * 500
+	validationStatus := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
+	if validationStatus == nil || validationStatus.Status == metav1.ConditionUnknown {
+		return false
+	}
+	return time.Now().Before(validationStatus.LastTransitionTime.Time.Add(recentTimeBuffer))
 }
 
 func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
