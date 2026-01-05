@@ -209,12 +209,13 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 }
 
 func (r *FenceAgentsRemediationTemplateReconciler) isRecentlyCompletedValidated(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	recentTimeBuffer := time.Second * 2
+	// In case validationStatus is older than this, we consider it stale and recalculate it
+	staleTimeout := time.Second * 2
 	validationStatus := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
 	if validationStatus == nil || validationStatus.Status == metav1.ConditionUnknown {
 		return false
 	}
-	return time.Now().Before(validationStatus.LastTransitionTime.Time.Add(recentTimeBuffer))
+	return time.Now().Before(validationStatus.LastTransitionTime.Time.Add(staleTimeout))
 }
 
 func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
