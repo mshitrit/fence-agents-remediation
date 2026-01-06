@@ -205,10 +205,12 @@ var _ = Describe("FAR E2e", func() {
 					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
 					Timeout:             metav1.Duration{Duration: 60 * time.Second},
 				}
+				By("About to create FenceAgentsRemediationTemplate")
 				fart := &v1alpha1.FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{Name: "valid-fart-validation-test", Namespace: operatorNsName},
 					Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: validFARTSpec}},
 				}
+				log.Info("Creating FenceAgentsRemediationTemplate", "template", fart)
 				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create valid fart should succeed")
 				DeferCleanup(func() {
 					Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
