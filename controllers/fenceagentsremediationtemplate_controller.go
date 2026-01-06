@@ -262,22 +262,24 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 		}
 	}
 
-	// Run the status command with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, statusValidationTimeout)
-	defer cancel()
-
 	r.Log.Info("Testing fence agent status command", "agent", agent, "command", command)
 
-	stdout, stderr, _, err := r.Executor.SyncExecute(ctx, command, 1, 0, statusValidationTimeout)
+	stdout, stderr, retryErr, cmdErr := r.Executor.SyncExecute(ctx, command, 1, 0, statusValidationTimeout)
 
-	if err != nil {
-		if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
+	if retryErr != nil {
+		if errors.Is(retryErr, context.DeadlineExceeded) {
 			result.Message = fmt.Sprintf("status command timed out after %v", statusValidationTimeout)
 			r.Log.Info("runFenceStatus status command timed out", "result", result)
 			return result
 		}
 
-		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", err, stderr, stdout)
+		result.Message = fmt.Sprintf("fence agent command retry failed: %v (stderr: %s, stdout: %s)", retryErr, stderr, stdout)
+		r.Log.Info("runFenceStatus status command retry failed", "result", result)
+		return result
+	}
+
+	if cmdErr != nil {
+		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", cmdErr, stderr, stdout)
 		r.Log.Info("runFenceStatus status command failed", "result", result)
 		return result
 	}
