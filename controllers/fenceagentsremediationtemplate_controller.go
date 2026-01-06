@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -32,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -268,7 +268,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 	stdout, stderr, retryErr, cmdErr := r.Executor.SyncExecute(ctx, command, 1, 0, statusValidationTimeout)
 
 	if retryErr != nil {
-		if errors.Is(retryErr, context.DeadlineExceeded) {
+		if wait.Interrupted(retryErr) {
 			result.Message = fmt.Sprintf("status command timed out after %v", statusValidationTimeout)
 			r.Log.Info("runFenceStatus status command timed out", "result", result)
 			return result
