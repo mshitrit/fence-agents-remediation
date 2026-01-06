@@ -185,7 +185,8 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// All selected nodes processed, finalize
+	// Clear ValidationPassed; it was only used for tracking during reconciliation.
+	// In case validation didn't pass we keep the failures reports only
 	fart.Status.ValidationPassed = map[string]string{}
 	allOK := len(fart.Status.ValidationFailures) == 0
 	if allOK {
