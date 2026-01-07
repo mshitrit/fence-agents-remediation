@@ -110,8 +110,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 // validateFenceStatusForTemplate contains the template validation logic (extracted from Reconcile)
 func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
-	// Recently validated, so skipping in order to not trigger endless reconcile loop
-	if r.isRecentlyCompletedValidated(fart) {
+	if !r.isValidationRequired(fart) {
 		return ctrl.Result{}, nil
 	}
 
@@ -209,14 +208,13 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	return ctrl.Result{}, nil
 }
 
-func (r *FenceAgentsRemediationTemplateReconciler) isRecentlyCompletedValidated(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	// In case validationStatus is older than this, we consider it stale and recalculate it
-	staleTimeout := time.Second * 2
+func (r *FenceAgentsRemediationTemplateReconciler) isValidationRequired(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
 	validationStatus := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
 	if validationStatus == nil || validationStatus.Status == metav1.ConditionUnknown {
-		return false
+		return true
 	}
-	return time.Now().Before(validationStatus.LastTransitionTime.Time.Add(staleTimeout))
+	// If false, then condition isn't  validated for this spec
+	return validationStatus.ObservedGeneration != fart.GetGeneration()
 }
 
 func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
