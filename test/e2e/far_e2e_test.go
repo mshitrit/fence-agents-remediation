@@ -60,80 +60,118 @@ var (
 
 var _ = Describe("FAR E2e", func() {
 	var (
-		testShareParam map[v1alpha1.ParameterName]string
-		testNodeParam  map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
+		testShareParam                map[v1alpha1.ParameterName]string
+		testNodeParam                 map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
+		availableWorkerNodes          *corev1.NodeList
+		selectedNode                  *corev1.Node
+		nodeName                      string
+		pod                           *corev1.Pod
+		startTime, nodeBootTimeBefore time.Time
+		skipRemediationCreation       bool
+		testActionVar                 string
+		remediationStrategyVar        v1alpha1.RemediationStrategyType
 	)
+
 	BeforeEach(func() {
-		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentDefaultAction)
+		testActionVar = reboot
+		remediationStrategyVar = v1alpha1.OutOfServiceTaintRemediationStrategy
+
 		var err error
+		testShareParam = buildSharedParameters(clusterPlatform, fenceAgentDefaultAction)
 		testNodeParam, err = buildNodeParameters()
 		Expect(err).ToNot(HaveOccurred(), "can't get node information")
+		skipRemediationCreation = false
+		if stopTesting {
+			Skip("Skip testing due to unsupported platform")
+		}
+		if availableWorkerNodes == nil {
+			availableWorkerNodes = getReadyWorkerNodes()
+		}
+		if len(availableWorkerNodes.Items) < 1 {
+			Fail("There isn't an available (and Ready) worker node in the cluster")
+		}
+
+		selectedNode = pickRemediatedNode(availableWorkerNodes)
+		nodeName = selectedNode.Name
+		printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
+
+		// save the node's boot time prior to the fence agent call
+		nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
+		Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
+	})
+
+	JustBeforeEach(func() {
+		if _, isExist := os.LookupEnv(skipOOSREnvVarName); remediationStrategyVar == v1alpha1.OutOfServiceTaintRemediationStrategy && isExist {
+			Skip("Skip this block due to unsupported condition")
+		}
+
+		if skipRemediationCreation {
+			return
+		}
+		// create tested pod which will be deleted by the far CR
+		pod = createTestedPod(nodeName)
+		DeferCleanup(cleanupTestedResources, pod)
+
+		// set the node as "unhealthy" by disabling kubelet
+		makeNodeUnready(selectedNode)
+		testShareParam["--action"] = testActionVar
+
+		startTime = time.Now()
+		far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategyVar)
+
+		DeferCleanup(deleteFAR, far)
+		// The node needs to be powered on after 'off' remediation
+		if testActionVar == "off" {
+			DeferCleanup(powerOnNodeAndWaitUntilReady, far, selectedNode)
+		}
+	})
+
+	When("creating a valid FART to validate fence agent parameters", func() {
+		BeforeEach(func() {
+			// since we test here the validation we are skipping remediation creation
+			skipRemediationCreation = true
+			testShareParam = addSecretsToSharedParams(testShareParam)
+		})
+		It("should validate the fence agent parameters and set the validation condition", func() {
+			validFARTSpec := v1alpha1.FenceAgentsRemediationSpec{
+				Agent:               fenceAgent,
+				SharedParameters:    testShareParam,
+				NodeParameters:      testNodeParam,
+				RemediationStrategy: remediationStrategyVar,
+				RetryCount:          10,
+				RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+				Timeout:             metav1.Duration{Duration: 60 * time.Second},
+			}
+			By("About to create FenceAgentsRemediationTemplate")
+			fart := &v1alpha1.FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: "valid-fart-validation-test", Namespace: operatorNsName},
+				Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: validFARTSpec}},
+			}
+			log.Info("Creating FenceAgentsRemediationTemplate", "template", fart)
+			Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create valid fart should succeed")
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
+			})
+
+			By("checking that ParametersValidation condition is set and validation completes")
+			verifyFARTValidationCondition(fart.Name, operatorNsName)
+		})
 	})
 
 	// runFARTests is a utility function to run FAR tests.
 	// It accepts a remediation strategy and a condition to determine if the tests should be skipped.
-	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, testAction string, skipCondition func() bool) {
-		var (
-			availableWorkerNodes          *corev1.NodeList
-			selectedNode                  *corev1.Node
-			nodeName                      string
-			pod                           *corev1.Pod
-			startTime, nodeBootTimeBefore time.Time
-			skipRemediationCreation       bool
-		)
+	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, testAction string) {
 		BeforeEach(func() {
-			skipRemediationCreation = false
-			if stopTesting {
-				Skip("Skip testing due to unsupported platform")
-			}
-			if skipCondition() {
-				Skip("Skip this block due to unsupported condition")
-			}
-
-			if availableWorkerNodes == nil {
-				availableWorkerNodes = getReadyWorkerNodes()
-			}
-			if len(availableWorkerNodes.Items) < 1 {
-				Fail("There isn't an available (and Ready) worker node in the cluster")
-			}
-
-			selectedNode = pickRemediatedNode(availableWorkerNodes)
-			nodeName = selectedNode.Name
-			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
-
-			var err error
-			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
-			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
-
+			remediationStrategyVar = remediationStrategy
+			testActionVar = testAction
 		})
-		JustBeforeEach(func() {
-			if skipRemediationCreation {
-				return
-			}
-			// create tested pod which will be deleted by the far CR
-			pod = createTestedPod(nodeName)
-			DeferCleanup(cleanupTestedResources, pod)
 
-			// set the node as "unhealthy" by disabling kubelet
-			makeNodeUnready(selectedNode)
-			testShareParam["--action"] = testAction
-
-			startTime = time.Now()
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
-
-			DeferCleanup(deleteFAR, far)
-			// The node needs to be powered on after 'off' remediation
-			if testAction == "off" {
-				DeferCleanup(powerOnNodeAndWaitUntilReady, far, selectedNode)
-			}
-		})
 		When("running FAR to remediate a node with secrets in shared parameters (legacy)", func() {
 			BeforeEach(func() {
 				testShareParam = addSecretsToSharedParams(testShareParam)
 			})
 			It("should successfully remediate the node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy, testAction)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategyVar, testActionVar)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
@@ -147,7 +185,7 @@ var _ = Describe("FAR E2e", func() {
 				})
 			})
 			It("should successfully remediate the node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy, testAction)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategyVar, testActionVar)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
@@ -165,7 +203,7 @@ var _ = Describe("FAR E2e", func() {
 						Agent:               fenceAgent,
 						SharedParameters:    nil,
 						NodeParameters:      nil,
-						RemediationStrategy: remediationStrategy,
+						RemediationStrategy: remediationStrategyVar,
 						RetryCount:          10,
 						RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
 						Timeout:             metav1.Duration{Duration: 60 * time.Second},
@@ -177,7 +215,7 @@ var _ = Describe("FAR E2e", func() {
 					Agent:               fenceAgent,
 					SharedParameters:    nil,
 					NodeParameters:      nil,
-					RemediationStrategy: remediationStrategy,
+					RemediationStrategy: remediationStrategyVar,
 					RetryCount:          10,
 					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
 					Timeout:             metav1.Duration{Duration: 60 * time.Second},
@@ -189,60 +227,22 @@ var _ = Describe("FAR E2e", func() {
 			})
 		})
 
-		When("creating a valid FART to validate fence agent parameters", func() {
-			BeforeEach(func() {
-				// since we test here the validation we are skipping remediation creation
-				skipRemediationCreation = true
-				testShareParam = addSecretsToSharedParams(testShareParam)
-			})
-			It("should validate the fence agent parameters and set the validation condition", func() {
-				validFARTSpec := v1alpha1.FenceAgentsRemediationSpec{
-					Agent:               fenceAgent,
-					SharedParameters:    testShareParam,
-					NodeParameters:      testNodeParam,
-					RemediationStrategy: remediationStrategy,
-					RetryCount:          10,
-					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
-					Timeout:             metav1.Duration{Duration: 60 * time.Second},
-				}
-				By("About to create FenceAgentsRemediationTemplate")
-				fart := &v1alpha1.FenceAgentsRemediationTemplate{
-					ObjectMeta: metav1.ObjectMeta{Name: "valid-fart-validation-test", Namespace: operatorNsName},
-					Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: validFARTSpec}},
-				}
-				log.Info("Creating FenceAgentsRemediationTemplate", "template", fart)
-				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create valid fart should succeed")
-				DeferCleanup(func() {
-					Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
-				})
-
-				By("checking that ParametersValidation condition is set and validation completes")
-				verifyFARTValidationCondition(fart.Name, operatorNsName)
-			})
-		})
-
 	}
 
 	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, reboot, func() bool { return false })
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, reboot)
 	})
 
 	Context("stress cluster with OutOfServiceTaint remediation strategy under reboot scenario", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, reboot, func() bool {
-			_, isExist := os.LookupEnv(skipOOSREnvVarName)
-			return isExist
-		})
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, reboot)
 	})
 
 	Context("stress cluster with ResourceDeletion remediation strategy under power-off scenario", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, off, func() bool { return false })
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, off)
 	})
 
 	Context("stress cluster with OutOfServiceTaint remediation strategy under power-off scenario", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, off, func() bool {
-			_, isExist := os.LookupEnv(skipOOSREnvVarName)
-			return isExist
-		})
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, off)
 	})
 })
 
