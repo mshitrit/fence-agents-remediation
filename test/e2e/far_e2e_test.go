@@ -2,8 +2,10 @@ package e2e
 
 import (
 	"context"
+	"maps"
 	"math/rand"
 	"os"
+	"slices"
 	"time"
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
@@ -147,7 +149,7 @@ var _ = Describe("FAR E2e", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "valid-fart-validation-test", Namespace: operatorNsName},
 				Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: validFARTSpec}},
 			}
-			log.Info("Creating FenceAgentsRemediationTemplate", "template", fart)
+			log.Info("Creating FenceAgentsRemediationTemplate", "template", fart.Name, "namespace", operatorNsName, "sharedParamsKeys", slices.Collect(maps.Keys(testShareParam)), "nodeParamsKeys", slices.Collect(maps.Keys(testNodeParam)), "remediationStrategy", remediationStrategyVar)
 			Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create valid fart should succeed")
 			DeferCleanup(func() {
 				Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
