@@ -19,6 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -261,7 +263,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 		}
 	}
 
-	r.Log.Info("Testing fence agent status command", "agent", agent, "command", command)
+	r.Log.Info("Testing fence agent status command", "Fence Agent", agent, "Parameters", slices.Collect(maps.Keys(parameters)))
 
 	stdout, stderr, retryErr, cmdErr := r.Executor.SyncExecute(ctx, command, 1, 0, statusValidationTimeout)
 
@@ -273,13 +275,14 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 		}
 
 		result.Message = fmt.Sprintf("fence agent command retry failed: %v (stderr: %s, stdout: %s)", retryErr, stderr, stdout)
-		r.Log.Info("runFenceStatus status command retry failed", "result", result)
+		r.Log.Error(retryErr, cli.FenceAgentRetryErrorMessage)
 		return result
 	}
 
 	if cmdErr != nil {
 		result.Message = fmt.Sprintf("fence agent command failed: %v (stderr: %s, stdout: %s)", cmdErr, stderr, stdout)
-		r.Log.Info("runFenceStatus status command failed", "result", result)
+		r.Log.Info(cli.FenceAgentFailedCommandMessage, "response", stdout, "errMessage", stderr, "err", cmdErr)
+
 		return result
 	}
 
