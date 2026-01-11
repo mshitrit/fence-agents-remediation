@@ -142,7 +142,10 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	selectedNodes := nodeNames[:size]
 
 	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
-	if cond == nil || cond.Reason != ReasonValidationInProgress {
+	// Restart the validation if: 1. it's the first 2.Previous validation was completed and another is triggered by a user change 3.User change occurred when a validation was in progress
+	if cond == nil || cond.Reason != ReasonValidationInProgress || cond.ObservedGeneration != fart.GetGeneration() {
+		fart.Status.ValidationFailures = map[string]string{}
+		fart.Status.ValidationPassed = map[string]string{}
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
 			Type:               ConditionParametersValidation,
 			Status:             metav1.ConditionUnknown,
