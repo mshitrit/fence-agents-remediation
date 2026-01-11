@@ -58,15 +58,18 @@ type ParameterValidationResult struct {
 }
 
 const (
-	parameterActionStatusValue = "status"
-	// statusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
-	statusValidationTimeout = 3 * time.Second
-
+	parameterActionStatusValue    = "status"
 	ConditionParametersValidation = "ParametersValidation"
 
 	ReasonValidationInProgress = "ValidationInProgress"
 	ReasonValidationSucceeded  = "ValidationSucceeded"
 	ReasonValidationFailed     = "ValidationFailed"
+)
+
+var (
+	// statusValidationTimeout is the maximum time allowed for a single status validation before it would time out.
+	// Using 15 sec to be somewhere in the range of the 20 sec which fence agents like fence_ipmilan and fence_idrac default to as power_timeout for status and power-change operations https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/fence_configuration_guide/s1-software-fence-drac5-ca
+	statusValidationTimeout = 15 * time.Second
 )
 
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=get;list;watch;create;update;patch;delete
@@ -132,7 +135,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 			Type:               ConditionParametersValidation,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonValidationFailed,
-			Message:            fmt.Sprintf("parameters validation failed invalid value of StatusValidationSample: %s", spec.StatusValidationSample),
+			Message:            fmt.Sprintf("parameters validation failed invalid value of StatusValidationSample: %v", spec.StatusValidationSample),
 			ObservedGeneration: fart.GetGeneration(),
 		})
 		// Configuration issue so no point to return an error
@@ -236,7 +239,7 @@ func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
 		return 0, err
 	}
 	if scaled < 0 || scaled > total {
-		return 0, fmt.Errorf("invalid value for StatusValidationSample: %s", sample)
+		return 0, fmt.Errorf("invalid value for StatusValidationSample: %v", sample)
 	}
 
 	return scaled, nil
@@ -262,7 +265,10 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 	// Add parameters (excluding action parameters to avoid conflicts)
 	for paramName, paramValue := range parameters {
 		if string(paramName) != v1alpha1.ActionName && string(paramName) != v1alpha1.ParameterActionName {
-			command = append(command, string(paramName), paramValue)
+			command = append(command, string(paramName))
+			if paramValue != "" {
+				command = append(command, paramValue)
+			}
 		}
 	}
 
@@ -290,7 +296,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 	}
 
 	// Command completed successfully, now check if stdout contains "Status: ON"
-	if strings.Contains(stdout, "Status: ON") {
+	if strings.Contains(strings.ToUpper(stdout), "ON") {
 		result.IsSuccessful = true
 		r.Log.Info("Fence agent status command succeeded with Status: ON", "agent", agent, "stdout", stdout)
 		return result

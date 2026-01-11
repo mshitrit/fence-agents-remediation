@@ -123,6 +123,10 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 		Factor:   1.0,
 	}
 
+	if len(command) == 0 {
+		return "", "", nil, fmt.Errorf("command is empty")
+	}
+
 	e.log.Info("fence agent start", "uid", uid, "fence_agent", command[0], "retryCount", retryCount, "retryInterval", retryInterval, "timeout", timeout)
 
 	retryErr = wait.ExponentialBackoffWithContext(ctx,
@@ -214,6 +218,9 @@ func (e *Executer) Remove(uid types.UID) {
 
 // run runs the command in the container and updates the status of the FAR instance maching the UID
 func run(ctx context.Context, command []string) (stdout, stderr string, err error) {
+	if len(command) == 0 {
+		return "", "", fmt.Errorf("command is empty")
+	}
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 
 	var outBuilder, errBuilder strings.Builder
