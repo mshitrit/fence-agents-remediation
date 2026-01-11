@@ -121,7 +121,7 @@ type FenceAgentsRemediationSpec struct {
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|-1|[0-9]+)$"
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	StatusValidationSample *intstr.IntOrString `json:"validationSample,omitempty"`
+	StatusValidationSample *intstr.IntOrString `json:"statusValidationSample,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation

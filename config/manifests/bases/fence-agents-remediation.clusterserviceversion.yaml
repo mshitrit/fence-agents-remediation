@@ -67,14 +67,14 @@ spec:
       - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: sharedparameters
-      - description: Timeout is the timeout for each fencing agent execution
-        displayName: Timeout
-        path: timeout
       - description: StatusValidationSample configures how many nodes the status validation
           should run for. Accepts an absolute number (e.g., 3), a percentage string
           (e.g., "60%"), or -1 for all nodes. Optional; defaults to 100% (all nodes).
         displayName: Status Validation Sample
-        path: validationSample
+        path: statusValidationSample
+      - description: Timeout is the timeout for each fencing agent execution
+        displayName: Timeout
+        path: timeout
       statusDescriptors:
       - description: 'Represents the observations of a FenceAgentsRemediation''s current
           state. Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded",
@@ -136,14 +136,14 @@ spec:
       - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: template.spec.sharedparameters
-      - description: Timeout is the timeout for each fencing agent execution
-        displayName: Timeout
-        path: template.spec.timeout
       - description: StatusValidationSample configures how many nodes the status validation
           should run for. Accepts an absolute number (e.g., 3), a percentage string
           (e.g., "60%"), or -1 for all nodes. Optional; defaults to 100% (all nodes).
         displayName: Status Validation Sample
-        path: template.spec.validationSample
+        path: template.spec.statusValidationSample
+      - description: Timeout is the timeout for each fencing agent execution
+        displayName: Timeout
+        path: template.spec.timeout
       version: v1alpha1
   description: |
     ### Introduction
