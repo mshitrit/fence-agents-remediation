@@ -108,6 +108,12 @@ var _ = Describe("FAR E2e", func() {
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
+			// Release the node back to the pool if remediation is skipped
+			DeferCleanup(func() {
+				if skipRemediationCreation && selectedNode != nil {
+					availableWorkerNodes.Items = append(availableWorkerNodes.Items, *selectedNode)
+				}
+			})
 		})
 		JustBeforeEach(func() {
 			if skipRemediationCreation {
