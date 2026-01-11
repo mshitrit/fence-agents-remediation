@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -66,6 +67,7 @@ var _ = Describe("FART Controller", func() {
 		})
 		When("2/3  nodes status isn't ok", func() {
 			BeforeEach(func() {
+				statusValidationTimeout = 3 * time.Second
 				fart = &v1alpha1.FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "tmpl-mixed",
