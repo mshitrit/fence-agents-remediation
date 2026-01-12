@@ -295,8 +295,11 @@ func (r *FenceAgentsRemediationTemplateReconciler) runFenceStatus(ctx context.Co
 		return result
 	}
 
-	// Command completed successfully, now check if stdout contains "Status: ON"
-	if strings.Contains(strings.ToUpper(stdout), "ON") {
+	// Check for both "Status: ON" (fence_ipmilan) and standalone "On" (fence_redfish)
+	upperOutput := strings.ToUpper(stdout)
+	if strings.Contains(upperOutput, "STATUS: ON") ||
+		strings.Contains(upperOutput, "STATUS:ON") ||
+		strings.HasPrefix(strings.TrimSpace(upperOutput), "ON") {
 		result.IsSuccessful = true
 		r.Log.Info("Fence agent status command succeeded with Status: ON", "agent", agent, "stdout", stdout)
 		return result
