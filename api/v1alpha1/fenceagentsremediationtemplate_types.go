@@ -40,7 +40,7 @@ type FenceAgentsRemediationTemplateSpec struct {
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateStatus struct {
 	// Represents the observations of a FenceAgentsRemediationTemplate's current state.
-	// Known .status.conditions.type: "ParametersValidated".
+	// Known .status.conditions.type: "ParametersValidation".
 	// +listType=map
 	// +listMapKey=type
 	// +optional
