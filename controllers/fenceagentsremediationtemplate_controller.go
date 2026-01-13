@@ -217,12 +217,12 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 }
 
 func (r *FenceAgentsRemediationTemplateReconciler) isValidationRequired(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	validationStatus := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
-	if validationStatus == nil || validationStatus.Status == metav1.ConditionUnknown {
+	validationCondition := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
+	if validationCondition == nil || validationCondition.Status == metav1.ConditionUnknown {
 		return true
 	}
 	// If false, then condition isn't  validated for this spec
-	return validationStatus.ObservedGeneration != fart.GetGeneration()
+	return validationCondition.ObservedGeneration != fart.GetGeneration()
 }
 
 func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
