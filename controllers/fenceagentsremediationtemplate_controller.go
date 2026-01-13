@@ -58,8 +58,8 @@ type ParameterValidationResult struct {
 }
 
 const (
-	parameterActionStatusValue    = "status"
-	ConditionParametersValidation = "ParametersValidation"
+	parameterActionStatusValue                   = "status"
+	ConditionFenceAgentStatusValidationSucceeded = "FenceAgentStatusValidationSucceeded"
 
 	ReasonValidationInProgress = "ValidationInProgress"
 	ReasonValidationSucceeded  = "ValidationSucceeded"
@@ -132,7 +132,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	if sampleErr != nil {
 		r.Log.Error(sampleErr, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", spec.StatusValidationSample)
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonValidationFailed,
 			Message:            fmt.Sprintf("parameters validation failed invalid value of StatusValidationSample: %v", spec.StatusValidationSample),
@@ -144,13 +144,13 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 
 	selectedNodes := nodeNames[:size]
 
-	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
+	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
 	// Restart the validation if: 1. it's the first 2.Previous validation was completed and another is triggered by a user change 3.User change occurred when a validation was in progress
 	if cond == nil || cond.Reason != ReasonValidationInProgress || cond.ObservedGeneration != fart.GetGeneration() {
 		fart.Status.ValidationFailures = map[string]string{}
 		fart.Status.ValidationPassed = map[string]string{}
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionUnknown,
 			Reason:             ReasonValidationInProgress,
 			Message:            fmt.Sprintf("validating parameters for %d node(s)", len(selectedNodes)),
@@ -198,7 +198,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	allOK := len(fart.Status.ValidationFailures) == 0
 	if allOK {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionTrue,
 			Reason:             ReasonValidationSucceeded,
 			Message:            "parameters validation succeeded",
@@ -206,7 +206,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		})
 	} else {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonValidationFailed,
 			Message:            fmt.Sprintf("parameters validation failed for %d node(s)", len(fart.Status.ValidationFailures)),
@@ -217,7 +217,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 }
 
 func (r *FenceAgentsRemediationTemplateReconciler) isValidationRequired(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	validationCondition := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
+	validationCondition := meta.FindStatusCondition(fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
 	if validationCondition == nil || validationCondition.Status == metav1.ConditionUnknown {
 		return true
 	}

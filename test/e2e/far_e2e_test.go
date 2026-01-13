@@ -164,7 +164,7 @@ var _ = Describe("FAR E2e", func() {
 					Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
 				})
 
-				By("checking that ParametersValidation condition is set and validation completes")
+				By("checking that FenceAgentStatusValidationSucceeded condition is set and validation completes")
 				verifyFARTValidationCondition(fart.Name, operatorNsName)
 			})
 		})
@@ -526,15 +526,15 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 	}, timeoutForRemediationChecks, pollForRemediationChecks).Should(Succeed())
 }
 
-// verifyFARTValidationCondition checks if the ParametersValidation condition on a FART is set and has the expected status
+// verifyFARTValidationCondition checks if the FenceAgentStatusValidationSucceeded condition on a FART is set and has the expected status
 func verifyFARTValidationCondition(fartName, namespace string) {
 	fart := &v1alpha1.FenceAgentsRemediationTemplate{}
 	fartNamespacedName := client.ObjectKey{Name: fartName, Namespace: namespace}
 	Eventually(func(g Gomega) {
 		g.Expect(k8sClient.Get(context.Background(), fartNamespacedName, fart)).To(Succeed())
-		condition := meta.FindStatusCondition(fart.Status.Conditions, "ParametersValidation")
-		g.Expect(condition).ToNot(BeNil(), "expected ParametersValidation condition to be set")
-		g.Expect(condition.Status).To(Equal(metav1.ConditionTrue), "expected ParametersValidation condition to have status %v, but got %v", metav1.ConditionTrue, condition.Status)
+		condition := meta.FindStatusCondition(fart.Status.Conditions, "FenceAgentStatusValidationSucceeded")
+		g.Expect(condition).ToNot(BeNil(), "expected FenceAgentStatusValidationSucceeded condition to be set")
+		g.Expect(condition.Status).To(Equal(metav1.ConditionTrue), "expected FenceAgentStatusValidationSucceeded condition to have status %v, but got %v", metav1.ConditionTrue, condition.Status)
 		g.Expect(condition.Reason).To(Equal("ValidationSucceeded"), "expected validation to succeed")
 		g.Expect(len(fart.Status.ValidationFailures)).To(Equal(0), "expected no validation failures")
 	}, "2m0s", "2s").Should(Succeed())

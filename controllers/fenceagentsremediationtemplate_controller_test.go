@@ -98,7 +98,7 @@ var _ = Describe("FART Controller", func() {
 					updated := &v1alpha1.FenceAgentsRemediationTemplate{}
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(fart), updated)).To(Succeed())
 
-					cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionParametersValidation)
+					cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
 					g.Expect(cond).NotTo(BeNil())
 					g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 					g.Expect(cond.Reason).To(Equal(ReasonValidationFailed))
@@ -130,7 +130,7 @@ var _ = Describe("FART Controller", func() {
 							updated := &v1alpha1.FenceAgentsRemediationTemplate{}
 							g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(fart), updated)).To(Succeed())
 
-							cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionParametersValidation)
+							cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
 							g.Expect(cond).NotTo(BeNil())
 							g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 							g.Expect(cond.Reason).To(Equal(ReasonValidationFailed))
@@ -156,7 +156,7 @@ func verifySuccess(fart *v1alpha1.FenceAgentsRemediationTemplate) {
 
 		g.Expect(updated.Status.ValidationFailures).To(BeEmpty())
 
-		cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionParametersValidation)
+		cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
 		g.Expect(cond).NotTo(BeNil())
 		g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 		g.Expect(cond.Reason).To(Equal(ReasonValidationSucceeded))
