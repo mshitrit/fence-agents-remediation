@@ -113,11 +113,9 @@ type FenceAgentsRemediationSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedSecretName *string `json:"sharedSecretName,omitempty"`
 
-	// StatusValidationSample configures how many nodes the status validation should run for.
+	// StatusValidationSample configures how many nodes the fence agent status validation should run for.
 	// Accepts an absolute number (e.g., 3), a percentage string (e.g., "60%"), or -1 for all nodes.
-	// Optional; defaults to 100% (all nodes).
 	// +optional
-	// +kubebuilder:default:="100%"
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|-1|[0-9]+)$"
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
