@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	commonEvents "github.com/medik8s/common/pkg/events"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -40,6 +41,7 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
 // FenceAgentsRemediationTemplateReconciler reconciles a FenceAgentsRemediationTemplate object
@@ -131,6 +133,7 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	size, err := calculateSampleSize(len(nodeNames), spec.StatusValidationSample)
 	if err != nil {
 		r.Log.Error(err, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", spec.StatusValidationSample)
+		commonEvents.WarningEvent(r.Recorder, fart, utils.EventReasonInvalidStatusValidationSample, utils.EventMessageInvalidStatusValidationSample)
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
 			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionFalse,
