@@ -128,9 +128,9 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	sort.Strings(nodeNames)
 
 	// Determine sampled nodes (optional) via spec.StatusValidationSample
-	size, sampleErr := calculateSampleSize(len(nodeNames), spec.StatusValidationSample)
-	if sampleErr != nil {
-		r.Log.Error(sampleErr, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", spec.StatusValidationSample)
+	size, err := calculateSampleSize(len(nodeNames), spec.StatusValidationSample)
+	if err != nil {
+		r.Log.Error(err, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", spec.StatusValidationSample)
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
 			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionFalse,
