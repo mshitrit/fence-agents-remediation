@@ -12,6 +12,8 @@ import (
 	medik8sLabels "github.com/medik8s/common/pkg/labels"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -145,13 +147,14 @@ var _ = Describe("FAR E2e", func() {
 			})
 			It("should validate the fence agent parameters and set the validation condition", func() {
 				validFARTSpec := v1alpha1.FenceAgentsRemediationSpec{
-					Agent:               fenceAgent,
-					SharedParameters:    testShareParam,
-					NodeParameters:      testNodeParam,
-					RemediationStrategy: v1alpha1.OutOfServiceTaintRemediationStrategy,
-					RetryCount:          10,
-					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
-					Timeout:             metav1.Duration{Duration: 60 * time.Second},
+					Agent:                  fenceAgent,
+					SharedParameters:       testShareParam,
+					NodeParameters:         testNodeParam,
+					RemediationStrategy:    v1alpha1.OutOfServiceTaintRemediationStrategy,
+					RetryCount:             10,
+					RetryInterval:          metav1.Duration{Duration: 20 * time.Second},
+					Timeout:                metav1.Duration{Duration: 60 * time.Second},
+					StatusValidationSample: ptr.To(intstr.FromString("100%")),
 				}
 				By("About to create FenceAgentsRemediationTemplate")
 				fart := &v1alpha1.FenceAgentsRemediationTemplate{
