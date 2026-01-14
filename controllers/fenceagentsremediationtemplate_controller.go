@@ -152,6 +152,10 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		return ctrl.Result{}, nil
 	}
 	if size == 0 {
+		// Treat "0 / 0%" as disabled validation; clear any previous results.
+		meta.RemoveStatusCondition(&fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
+		fart.Status.ValidationFailures = nil
+		fart.Status.ValidationPassed = nil
 		r.Log.Info("status validation skipped, StatusValidationSample is zero or undefined")
 		return ctrl.Result{}, nil
 	}
@@ -228,14 +232,18 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	return ctrl.Result{}, nil
 }
 
-func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
+func calculateSampleSize(totalNumberOfNodes int, sample *intstr.IntOrString) (int, error) {
 	if sample == nil {
 		return 0, nil
 	}
 	// Use k8s helper to scale int-or-percent
-	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, total, true)
+	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, totalNumberOfNodes, true)
 	if err != nil {
 		return 0, err
+	}
+	// user may use a fixed (non percentage) value which exceeds the number of nodes
+	if scaled > totalNumberOfNodes {
+		scaled = totalNumberOfNodes
 	}
 	return scaled, nil
 }

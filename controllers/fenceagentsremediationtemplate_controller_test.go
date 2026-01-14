@@ -35,6 +35,9 @@ var _ = Describe("FART Controller", func() {
 	var fart *v1alpha1.FenceAgentsRemediationTemplate
 
 	Context("Fence Status Validation", func() {
+		BeforeEach(func() {
+			statusValidationTimeout = 3 * time.Second
+		})
 		JustBeforeEach(func() {
 			Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
 			DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), fart) })
@@ -103,7 +106,6 @@ var _ = Describe("FART Controller", func() {
 		})
 		When("2/3  nodes status isn't ok", func() {
 			BeforeEach(func() {
-				statusValidationTimeout = 3 * time.Second
 				fart = &v1alpha1.FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "tmpl-mixed",
