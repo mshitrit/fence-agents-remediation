@@ -226,22 +226,14 @@ func (r *FenceAgentsRemediationTemplateReconciler) isValidationRequired(fart *v1
 }
 
 func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
-	if sample == nil || total == 0 {
-		return total, nil
-	}
-	// Treat -1 or lower (int) as all
-	if sample.Type == intstr.Int && sample.IntVal < 0 {
-		return total, nil
+	if sample == nil {
+		return 0, nil
 	}
 	// Use k8s helper to scale int-or-percent
 	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, total, true)
 	if err != nil {
 		return 0, err
 	}
-	if scaled < 0 || scaled > total {
-		return 0, fmt.Errorf("invalid value for StatusValidationSample: %v", sample)
-	}
-
 	return scaled, nil
 }
 
