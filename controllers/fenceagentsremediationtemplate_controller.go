@@ -151,7 +151,10 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		// Configuration issue so no point to return an error
 		return ctrl.Result{}, nil
 	}
-
+	if size == 0 {
+		r.Log.Info("status validation skipped, StatusValidationSample is zero or undefined")
+		return ctrl.Result{}, nil
+	}
 	selectedNodes := nodeNames[:size]
 
 	// Restart the validation if: 1. it's the first 2.Previous validation was completed and another is triggered by a user change 3.User change occurred when a validation was in progress
