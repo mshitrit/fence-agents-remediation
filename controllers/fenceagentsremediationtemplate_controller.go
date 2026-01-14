@@ -236,6 +236,12 @@ func calculateSampleSize(totalNumberOfNodes int, sample *intstr.IntOrString) (in
 	if sample == nil {
 		return 0, nil
 	}
+
+	// Reject negative integer values (pattern validation only applies to strings, not integers in anyOf)
+	if sample.Type == intstr.Int && sample.IntVal < 0 {
+		return 0, fmt.Errorf("invalid value for StatusValidationSample: negative values are not allowed, got %d", sample.IntVal)
+	}
+
 	// Use k8s helper to scale int-or-percent
 	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, totalNumberOfNodes, true)
 	if err != nil {
