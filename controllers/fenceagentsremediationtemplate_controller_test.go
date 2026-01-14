@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,6 +38,40 @@ var _ = Describe("FART Controller", func() {
 		JustBeforeEach(func() {
 			Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
 			DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), fart) })
+		})
+		When("StatusValidationSample is not defined in Spec", func() {
+			BeforeEach(func() {
+				fart = &v1alpha1.FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "tmpl-happy",
+						Namespace: defaultNamespace,
+					},
+					Spec: v1alpha1.FenceAgentsRemediationTemplateSpec{
+						Template: v1alpha1.FenceAgentsRemediationTemplateResource{
+							Spec: v1alpha1.FenceAgentsRemediationSpec{
+								Agent: "fence_ipmilan",
+								SharedParameters: map[v1alpha1.ParameterName]string{
+									"--username": "admin",
+									"--password": "password",
+								},
+								NodeParameters: map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
+									"--ip": {"worker-1": cli.SuccessfulStatusCheckIp},
+								},
+							},
+						},
+					},
+				}
+			})
+			It("Status validation should not happen", func() {
+				Consistently(func(g Gomega) {
+					updated := &v1alpha1.FenceAgentsRemediationTemplate{}
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(fart), updated)).To(Succeed())
+					g.Expect(updated.Status.ValidationFailures).To(BeNil())
+					g.Expect(updated.Status.ValidationPassed).To(BeNil())
+					cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
+					g.Expect(cond).To(BeNil())
+				}, "3s", "200ms").Should(Succeed())
+			})
 		})
 		When("Single node status is ok", func() {
 			BeforeEach(func() {
@@ -56,6 +91,7 @@ var _ = Describe("FART Controller", func() {
 								NodeParameters: map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
 									"--ip": {"worker-1": cli.SuccessfulStatusCheckIp},
 								},
+								StatusValidationSample: ptr.To(intstr.FromInt32(1)),
 							},
 						},
 					},
@@ -88,6 +124,7 @@ var _ = Describe("FART Controller", func() {
 										"worker-3": cli.OffStatusCheckIp,        // not-ON
 									},
 								},
+								StatusValidationSample: ptr.To(intstr.FromString("100%")),
 							},
 						},
 					},
