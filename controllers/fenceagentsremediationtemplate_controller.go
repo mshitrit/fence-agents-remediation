@@ -117,7 +117,14 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 // validateFenceStatusForTemplate contains the template validation logic (extracted from Reconcile)
 func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
-	if !r.isValidationRequired(fart) {
+	validationStatusCondition := meta.FindStatusCondition(fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
+	// validation finished when status is set and not unknown
+	validationFinished := validationStatusCondition != nil && validationStatusCondition.Status != metav1.ConditionUnknown
+	// we need to start new validation when it didn't start yet or spec was changed
+	needsNewValidation := validationStatusCondition == nil || fart.GetGeneration() != validationStatusCondition.ObservedGeneration
+
+	if validationFinished && !needsNewValidation {
+		// validation done and no changes in spec
 		return ctrl.Result{}, nil
 	}
 
@@ -147,9 +154,8 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 
 	selectedNodes := nodeNames[:size]
 
-	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
 	// Restart the validation if: 1. it's the first 2.Previous validation was completed and another is triggered by a user change 3.User change occurred when a validation was in progress
-	if cond == nil || cond.Reason != ReasonValidationInProgress || cond.ObservedGeneration != fart.GetGeneration() {
+	if needsNewValidation {
 		fart.Status.ValidationFailures = map[string]string{}
 		fart.Status.ValidationPassed = map[string]string{}
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
@@ -217,15 +223,6 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		})
 	}
 	return ctrl.Result{}, nil
-}
-
-func (r *FenceAgentsRemediationTemplateReconciler) isValidationRequired(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	validationCondition := meta.FindStatusCondition(fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
-	if validationCondition == nil || validationCondition.Status == metav1.ConditionUnknown {
-		return true
-	}
-	// If false, then condition isn't  validated for this spec
-	return validationCondition.ObservedGeneration != fart.GetGeneration()
 }
 
 func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
