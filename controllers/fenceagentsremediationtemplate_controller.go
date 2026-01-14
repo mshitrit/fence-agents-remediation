@@ -161,7 +161,6 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	}
 	selectedNodes := nodeNames[:size]
 
-	// Restart the validation if: 1. it's the first 2.Previous validation was completed and another is triggered by a user change 3.User change occurred when a validation was in progress
 	if needsNewValidation {
 		fart.Status.ValidationFailures = map[string]string{}
 		fart.Status.ValidationPassed = map[string]string{}
